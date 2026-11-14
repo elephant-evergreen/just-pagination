@@ -1,0 +1,14 @@
+@font-face { font-family: Mulish; src: url(assets/mulish.woff2) format("woff2"); font-weight: 200 900; font-display: swap; }
+:root { font-family: Mulish, Arial, sans-serif; color-scheme: light; color: #19211f; --muted: #53625e; --border: #d8e0dd; --link: #274037; }
+* { box-sizing: border-box; }
+button, input { font: inherit; }
+button:not(:disabled) { cursor: pointer; }
+a { color: var(--link); text-decoration-color: #91a89f; text-underline-offset: 3px; font-weight: 750; }
+:focus-visible { outline: 2px solid #535353; outline-offset: 2px; }
+[hidden] { display: none !important; }
+.action { display: inline-grid; place-items: center; height: 35px; padding: 0 10px; border: 1px solid #252525; border-radius: 7px; background: #252525; color: #fff; font-size: 12px; font-weight: 790; white-space: nowrap; }
+.action:disabled:not([aria-busy=true]) { border-color: #e4e4e4; background: #ededed; color: #686868; }
+.action[aria-busy=true] { cursor: progress; }
+.action[aria-busy=true]::after { content: "•••"; letter-spacing: 3px; padding-left: 3px; animation: working 800ms ease-in-out infinite alternate; }
+@keyframes working { from { opacity: .45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .action[aria-busy=true]::after { animation: none; } }

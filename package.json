@@ -1,0 +1,15 @@
+{
+  "name": "just-pagination",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.ts",
+    "check": "tsc -p tsconfig.tools.json && pnpm build && node --test \"test/**/*.test.ts\"",
+    "package": "pnpm check && node package-chrome.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.1.31",
+    "@types/node": "22.19.11",
+    "typescript": "5.9.3"
+  }
+}
