@@ -22,7 +22,7 @@ Standard pagination is detected locally. Ambiguous controls may send navigation 
 
 ## Build from source
 
-Clone or download this repository and [install mise](https://mise.jdx.dev/getting-started.html). From the repository root, run:
+Clone this repository or [download the source ZIP](https://github.com/elephant-evergreen/just-pagination/archive/refs/heads/main.zip) and extract it. [Install mise](https://mise.jdx.dev/getting-started.html), then run these commands from the project folder:
 
 ```sh
 mise install
