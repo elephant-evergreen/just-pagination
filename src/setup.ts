@@ -12,6 +12,9 @@ const pageStatus = document.querySelector<HTMLElement>(".page-status")!;
 const pager = document.querySelector<HTMLElement>(".pager")!;
 const previous = document.querySelector<HTMLButtonElement>(".previous")!;
 const next = document.querySelector<HTMLButtonElement>(".next")!;
+const keyboardCat = document.querySelector<HTMLImageElement>(".keyboard-cat img")!;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+let catTap: Animation | undefined;
 const disclosure = note.textContent!;
 const startPage = 4;
 let page = startPage;
@@ -65,6 +68,24 @@ function selectPage(destination: number) {
   drawPage();
   if (focused && (!focused.isConnected || focused.matches(":disabled"))) pager.focus({ preventScroll: true });
 }
+
+function tapKeyboardCat() {
+  if (reducedMotion.matches) return;
+  if (catTap) {
+    catTap.currentTime = 0;
+    catTap.play();
+  } else {
+    catTap = keyboardCat.animate([
+      { transform: "translateY(-66.666667%)", easing: "steps(1, jump-end)" },
+      { transform: "translateY(-33.333333%)", offset: 0.7, easing: "steps(1, jump-end)" },
+      { transform: "translateY(0)" },
+    ], 150);
+  }
+}
+
+reducedMotion.addEventListener("change", () => {
+  if (reducedMotion.matches) catTap?.cancel();
+});
 
 function renderForm() {
   action.disabled = busy || !connected && !field.value.trim();
@@ -147,6 +168,7 @@ document.addEventListener("keydown", event => {
   if (page + delta < 1 || page + delta > pages.length) return;
   event.preventDefault();
   selectPage(page + delta);
+  tapKeyboardCat();
 });
 
 drawPage();
