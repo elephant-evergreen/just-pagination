@@ -8,7 +8,7 @@ Move between pages of a list with the left and right arrow keys.
 
 Use **←** and **→** to move through search results, product listings, and other paginated lists. Connect your TypeSafe Jev API key and try the shortcut in the sample gallery. Once connected, the shortcut is available on paginated lists where Chrome grants site access. Use the toolbar or Settings to disable it on a site.
 
-Just Pagination recognizes standard pagination locally. It can ask TypeSafe to help interpret ambiguous controls. TypeSafe usage charges may apply. The shortcut works when it can identify a previous or next page in the same list.
+Just Pagination recognizes standard pagination locally. It can ask TypeSafe to help interpret ambiguous controls. TypeSafe usage charges may apply. The shortcut works when it can identify a previous or next page in the same list. The sample gallery loads its photos from Pexels.
 
 ## Single purpose
 

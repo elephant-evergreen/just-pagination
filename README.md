@@ -1,4 +1,4 @@
-# <img src="extension/assets/icon.png" width="32" height="32" alt=""> Just Pagination
+# <img src="extension/assets/icon.png" width="32" height="32" alt=""> Just Pagination <img src="media/chrome-extension.svg" width="124" height="22" alt="Chrome extension">
 
 Use ← and → to move between pages of search results, product listings, and other paginated lists in Chrome.
 
@@ -10,7 +10,7 @@ https://github.com/user-attachments/assets/53f53480-9ae6-4d7f-9dd7-44fd5e3d71df
 
 You need desktop Chrome 120 or later and a [TypeSafe Jev API key](https://console.typesafe.ai/keys). TypeSafe usage charges may apply.
 
-1. [Build from source](#build-from-source) or download and extract a ZIP from [Releases](https://github.com/elephant-evergreen/just-pagination/releases) once available.
+1. Download and extract the ZIP from the [latest release](https://github.com/elephant-evergreen/just-pagination/releases/latest), or [build from source](#build-from-source).
 2. In Chrome, open `chrome://extensions` and turn on **Developer mode**.
 3. Click **Load unpacked** and select the folder containing `manifest.json`. For a source build, select `dist/`.
 4. In **Just Pagination Settings**, paste your Jev key and click **Connect**. To reopen this page, click **Settings** in the toolbar popup.
