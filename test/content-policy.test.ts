@@ -4,6 +4,7 @@ type Direction = "previous" | "next";
 type Group = { currentPage?: number };
 
 class FakeElement {
+  attributes: Record<string, string> = {};
   children: FakeElement[] = [];
   isConnected = true;
   textContent = "";
@@ -16,7 +17,7 @@ class FakeElement {
 
   closest() { return null; }
   getClientRects() { return [{}]; }
-  getAttribute(name: string) { return name === "aria-label" ? this.ariaLabel ?? null : null; }
+  getAttribute(name: string) { return name === "aria-label" ? this.ariaLabel ?? null : this.attributes[name] ?? null; }
   hasAttribute() { return false; }
   matches() { return true; }
 }
@@ -24,15 +25,17 @@ class FakeElement {
 class FakeAnchor extends FakeElement {
   href: string;
 
-  constructor(href: string, text = "", ariaLabel?: string) {
+  constructor(href: string, text = "", ariaLabel?: string, rel?: string) {
     super(text, ariaLabel);
     this.href = href;
+    if (rel) this.attributes.rel = rel;
   }
 }
 
 class FakeButton extends FakeElement {}
 
 type Policy = {
+  inferredPage(controls: FakeElement[], current: URL): number | undefined;
   routeEvidence(controls: FakeElement[], currentPage?: number): boolean;
   pageDirection(control: FakeElement, group?: Group): Direction | undefined;
   automatic(group: Group, control: FakeElement): boolean;
@@ -89,7 +92,7 @@ async function policy(href: string): Promise<Policy> {
   const end = js.lastIndexOf("\n  refresh();\n})();");
   if (end < 0) throw new Error("Could not expose content policy");
   const instrumented = js.slice(0, end) +
-    "\n  Object.assign(globalThis, { __justPaginationPolicy: { routeEvidence, pageDirection, automatic, activationEvidence } });" +
+    "\n  Object.assign(globalThis, { __justPaginationPolicy: { inferredPage, routeEvidence, pageDirection, automatic, activationEvidence } });" +
     js.slice(end);
   new Function(instrumented)();
   return (globalThis as typeof globalThis & { __justPaginationPolicy: Policy }).__justPaginationPolicy;
@@ -115,7 +118,41 @@ test("known same-list routes stay directional in both directions", async () => {
   await policy("https://example.test/list/2");
   expect(content.pageDirection(new FakeAnchor("https://example.test/list/3", "3"), group(2))).toBe("next");
   expect(content.pageDirection(new FakeAnchor("https://example.test/list/1", "1"), group(2))).toBe("previous");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/list", "1", undefined, "prev"), group(2))).toBe("previous");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/other", "1", undefined, "prev"), group(2))).toBeUndefined();
   expect(content.pageDirection(new FakeAnchor("https://example.test/workflow/3", "3"), group(2))).toBeUndefined();
+});
+
+test("infers a missing current page from a numbered path series", async () => {
+  const content = await policy("https://example.test/list/5");
+  const five = [
+    new FakeAnchor("https://example.test/list", "1"),
+    new FakeAnchor("https://example.test/list/4", "4", undefined, "prev"),
+    new FakeAnchor("https://example.test/list/6", "6", undefined, "next"),
+    new FakeAnchor("https://example.test/list/20", "20"),
+  ];
+  expect(content.inferredPage(five, new URL("https://example.test/list/5"))).toBe(5);
+  expect(content.pageDirection(five[1], group(5))).toBe("previous");
+  expect(content.pageDirection(five[2], group(5))).toBe("next");
+
+  await policy("https://example.test/list/2");
+  const two = [
+    new FakeAnchor("https://example.test/list", "1", undefined, "prev"),
+    new FakeAnchor("https://example.test/list/3", "3", undefined, "next"),
+    new FakeAnchor("https://example.test/list/20", "20"),
+  ];
+  expect(content.inferredPage(two, new URL("https://example.test/list/2"))).toBe(2);
+
+  await policy("https://example.test/list/5");
+  expect(content.inferredPage([
+    new FakeAnchor("https://example.test/list/4", "Previous", undefined, "prev"),
+    new FakeAnchor("https://example.test/list/6", "Next", undefined, "next"),
+    new FakeAnchor("https://example.test/list/20", "20"),
+  ], new URL("https://example.test/list/5"))).toBeUndefined();
+  expect(content.inferredPage([
+    new FakeAnchor("https://example.test/list/4", "4", undefined, "prev"),
+    new FakeAnchor("https://example.test/list/6", "6", undefined, "next"),
+  ], new URL("https://example.test/list/5"))).toBeUndefined();
 });
 
 test("buttons need numbered or routed pagination evidence", async () => {
