@@ -2,7 +2,7 @@ import { classify, parseClassification, verifyKey } from "./jev.js";
 import { arrowKeys, enteredHost, isRecord, siteHost } from "./protocol.js";
 import type { Classification, Decisions, SetupStatus, SiteInfo } from "./protocol.js";
 
-const setup = chrome.runtime.getURL("setup.html");
+const settings = chrome.runtime.getURL("settings.html");
 const popup = chrome.runtime.getURL("popup.html");
 const local = chrome.storage.local;
 const protectedStorage = local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
@@ -56,7 +56,7 @@ async function refreshTabs() {
 chrome.permissions.onAdded.addListener(() => { void refreshTabs().catch(() => {}); });
 chrome.permissions.onRemoved.addListener(() => { void refreshTabs().catch(() => {}); });
 chrome.runtime.onInstalled.addListener(details => {
-  if (details.reason === "install") void chrome.tabs.create({ url: setup });
+  if (details.reason === "install") void chrome.tabs.create({ url: settings });
 });
 
 let classificationQueue = Promise.resolve();
@@ -118,7 +118,7 @@ function reserveClassification(documentId: string) {
 
 async function handle(message: Record<string, unknown>, sender: chrome.runtime.MessageSender): Promise<unknown> {
   if (sender.id !== chrome.runtime.id) return;
-  if (sender.url === setup) {
+  if (sender.url === settings) {
     if (message.type === "connect" && typeof message.key === "string") {
       const revision = ++connectionRevision;
       const key = message.key.trim();
@@ -153,8 +153,8 @@ async function handle(message: Record<string, unknown>, sender: chrome.runtime.M
       } satisfies SetupStatus;
     }
   }
-  if (sender.url === setup || sender.url === popup) {
-    if (message.type === "disabled-sites" && sender.url === setup) return (await preferences()).disabled;
+  if (sender.url === settings || sender.url === popup) {
+    if (message.type === "disabled-sites" && sender.url === settings) return (await preferences()).disabled;
     if (message.type === "site-status" && sender.url === popup && typeof message.url === "string") return siteStatus(message.url);
     if (message.type === "set-site-disabled" && typeof message.host === "string" && typeof message.disabled === "boolean") {
       const host = enteredHost(message.host);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Just Pagination",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Move between pages of a list with the left and right arrow keys.",
   "minimum_chrome_version": "120",
   "permissions": ["storage", "activeTab"],
@@ -14,6 +14,6 @@
   }],
   "background": {"service_worker": "background.js", "type": "module"},
   "action": {"default_popup": "popup.html", "default_icon": {"16": "assets/icon-16.png", "32": "assets/icon-32.png"}},
-  "options_ui": {"page": "setup.html", "open_in_tab": true},
+  "options_ui": {"page": "settings.html", "open_in_tab": true},
   "icons": {"16": "assets/icon-16.png", "32": "assets/icon-32.png", "48": "assets/icon-48.png", "128": "assets/icon.png"}
 }

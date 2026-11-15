@@ -1,6 +1,10 @@
-# Just Pagination
+# <img src="extension/assets/icon.png" width="32" height="32" alt=""> Just Pagination
 
 Use ← and → to move between pages of search results, product listings, and other paginated lists in Chrome.
+
+[![Watch the silent Just Pagination demo](media/just-pagination-preview.jpg)](https://raw.githubusercontent.com/elephant-evergreen/just-pagination/main/media/just-pagination.mp4)
+
+[Watch the 6-second demo](https://raw.githubusercontent.com/elephant-evergreen/just-pagination/main/media/just-pagination.mp4) · [Photo credits](media/photo-credits.md)
 
 ## Get started
 
@@ -10,7 +14,7 @@ You need desktop Chrome 120 or later and a [TypeSafe Jev API key](https://consol
 2. In Chrome, open `chrome://extensions` and turn on **Developer mode**.
 3. Click **Load unpacked** and select the folder containing `manifest.json`. For a source build, select `dist/`.
 4. In **Just Pagination Settings**, paste your Jev key and click **Connect**. To reopen this page, click **Settings** in the toolbar popup.
-5. Under **Try the arrow keys**, press ← or →. You can also click a page number.
+5. Under **Try the arrow keys**, press ← or → to turn a page and see the tabby tap its keyboard. You can also click a page number.
 
 ## Use it on a website
 

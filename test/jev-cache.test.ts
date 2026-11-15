@@ -119,12 +119,12 @@ test("reuses confident no-match decisions and retries incomplete results on late
 
 test("migrates disabled sites to exact hosts and preserves parallel changes", async t => {
   const worker = await mockWorker(t, () => answer("c1"), { pausedSites: ["https://example.test/*", "http://example.test/*"] });
-  const list = () => worker.send("setup.html", { type: "disabled-sites" });
+  const list = () => worker.send("settings.html", { type: "disabled-sites" });
   assert.deepEqual(await list(), ["example.test"]);
   assert.deepEqual(await worker.classify(`${site}/list?page=2`), {});
   assert.equal(worker.requestCount(), 0);
   const set = (host: string, disabled: boolean) =>
-    worker.send("setup.html", { type: "set-site-disabled", host, disabled });
+    worker.send("settings.html", { type: "set-site-disabled", host, disabled });
   assert.deepEqual(await Promise.all([set("other.test", true), set("example.test", false)]), [true, true]);
   assert.deepEqual(await list(), ["other.test"]);
   assert.deepEqual(await worker.classify(`${site}/list?page=2`), { next: 1 });
