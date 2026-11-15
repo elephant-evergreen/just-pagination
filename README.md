@@ -2,9 +2,9 @@
 
 Use ← and → to move between pages of search results, product listings, and other paginated lists in Chrome.
 
-[![Watch the silent Just Pagination demo](media/just-pagination-preview.jpg)](https://raw.githubusercontent.com/elephant-evergreen/just-pagination/main/media/just-pagination.mp4)
+https://github.com/user-attachments/assets/53f53480-9ae6-4d7f-9dd7-44fd5e3d71df
 
-[Watch the 6-second demo](https://raw.githubusercontent.com/elephant-evergreen/just-pagination/main/media/just-pagination.mp4) · [Photo credits](media/photo-credits.md)
+[Download the MP4](https://raw.githubusercontent.com/elephant-evergreen/just-pagination/main/media/just-pagination.mp4) · [Photo credits](media/photo-credits.md)
 
 ## Get started
 
