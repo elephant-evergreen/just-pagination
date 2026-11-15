@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Just Pagination",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Move between pages of a list with the left and right arrow keys.",
   "minimum_chrome_version": "120",
   "permissions": ["storage", "activeTab"],
