@@ -74,7 +74,7 @@ async function mockWorker(respond: (request: number) => Response, saved: Record<
         frameId: 0,
         tab: { id: 1, groupId: -1, index: 0, pinned: false,
           highlighted: false, windowId: 1, active: true, incognito: false, selected: true,
-          discarded: false, autoDiscardable: true, frozen: false },
+          discarded: false, autoDiscardable: true, frozen: false, lastAccessed: 0 },
         url,
         documentId: String(++documents),
       };
