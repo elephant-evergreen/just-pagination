@@ -11,6 +11,7 @@ type Decisions = import("./protocol.js").Decisions;
   const protectedControls = "input, textarea, select, [contenteditable]:not([contenteditable=false]), " +
     "[role=textbox], [role=slider], [role=spinbutton], [role=combobox], [role=listbox], [role=menu], " +
     "[role=tablist], [role=grid], [role=tree], video, audio";
+  const nonPagination = "dialog,[role=dialog],[role=menu],[role=tablist],[role=grid],[role=tree]";
   const labels: Record<Direction, RegExp> = {
     previous: /^(?:‹|←|❮|<|prev(?:ious)?(?:\s+page)?|newer\s+(?:posts|entries|articles)|前(?:へ|のページ)|前ページ)$/iu,
     next: /^(?:›|→|❯|>|next(?:\s+page)?|older\s+(?:posts|entries|articles)|次(?:へ|のページ)|次ページ)$/iu,
@@ -18,6 +19,7 @@ type Decisions = import("./protocol.js").Decisions;
   const navWords = /paginat|paging|(?:^|[\W_])pager(?:$|[\W_])|ページネーション|ページ送り|ページ移動|page[ -]?(?:nav(?:igation)?|numbers)/i;
   const directions = ["previous", "next"] as const;
   type Targets = Partial<Record<Direction, HTMLElement>>;
+  type Group = { root: Element; controls: HTMLElement[]; current?: Element; currentPage?: number };
   const paginationSelector = "nav,[role=navigation],[class*=paginat i],[class*=pager i],[class*=pagenav i],[class*=page-nav i],[data-pagination]";
   const selectedSelector = '.active,.selected,.current,.is-current,[class$="--current"],[class*="--current "],[aria-label^="Current page," i]';
   const currentSelector = "[aria-current=page],[aria-current=true]";
@@ -48,7 +50,8 @@ type Decisions = import("./protocol.js").Decisions;
 
   function usable(node: Element): node is HTMLElement {
     if (!(node instanceof HTMLElement) || !node.isConnected || !node.getClientRects().length) return false;
-    if (node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled,[role=dialog],dialog,form[method=dialog]")) return false;
+    if (node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled," +
+        nonPagination + ",form[method=dialog]")) return false;
     if (getComputedStyle(node).visibility !== "visible") return false;
     if (node instanceof HTMLAnchorElement) {
       if (node.hasAttribute("download") || (node.target && node.target !== "_self") || !safeDestination(node.href)) return false;
@@ -133,6 +136,66 @@ type Decisions = import("./protocol.js").Decisions;
     if (suffix && Number(suffix[1]) === page) return url.pathname.slice(0, -suffix[0].length);
   }
 
+  function routeEvidence(controls: HTMLElement[], currentPage: number | undefined) {
+    const current = new URL(location.href);
+    const suffix = current.pathname.match(numberedPath);
+    const page = suffix ? Number(suffix[1]) : currentPage;
+    const base = page === undefined ? undefined : numberedPathBase(current, page) ??
+      (page === 1 ? current.pathname.replace(/\/$/, "") : undefined);
+    const routes = new Map<string, Set<number>>();
+    for (const control of controls) {
+      if (!(control instanceof HTMLAnchorElement) || !usable(control)) continue;
+      const url = new URL(control.href);
+      if (addressDirection(control.href)) {
+        const address = pageAddress(url);
+        if (!address) continue;
+        const values = routes.get(address.route) ?? new Set<number>();
+        values.add(address.value);
+        routes.set(address.route, values);
+        continue;
+      }
+      const value = numberOf(control);
+      if (value === undefined || base === undefined || url.search !== current.search ||
+          numberedPathBase(url, value) !== base) continue;
+      const values = routes.get(base) ?? new Set<number>();
+      values.add(value);
+      routes.set(base, values);
+    }
+    return [...routes.values()].some(values => values.size >= 2);
+  }
+
+  function pageDirection(control: HTMLElement, group: Group | undefined) {
+    if (!(control instanceof HTMLAnchorElement)) return;
+    const direct = addressDirection(control.href);
+    if (direct) return direct;
+    if (!group) return;
+    const page = numberOf(control);
+    if (page === undefined || group.currentPage === undefined) return;
+    const url = new URL(control.href);
+    const base = numberedPathBase(url, page);
+    const current = new URL(location.href);
+    const currentBase = numberedPathBase(current, group.currentPage) ??
+      (group.currentPage === 1 ? current.pathname.replace(/\/$/, "") : undefined);
+    if (base === undefined || base !== currentBase || url.search !== current.search || page === group.currentPage) return;
+    return page > group.currentPage ? "next" : "previous";
+  }
+
+  function automatic(group: Group, control: HTMLElement) {
+    if (control instanceof HTMLAnchorElement) return pageDirection(control, group) !== undefined;
+    return numberOf(control) === undefined || group.currentPage !== undefined;
+  }
+
+  function activationEvidence(group: Group | undefined, target: HTMLElement, direction: Direction) {
+    if (target instanceof HTMLAnchorElement) return pageDirection(target, group) === direction;
+    if (!group) return false;
+    const page = numberOf(target);
+    if (page !== undefined) {
+      return group.currentPage !== undefined &&
+        page === group.currentPage + (direction === "next" ? 1 : -1);
+    }
+    return directionOf(target) === direction;
+  }
+
   function classificationLayout(root: Element, currentPage: number | undefined, controls: HTMLElement[]) {
     const url = new URL(location.href);
     const path = numberedPathBase(url, currentPage ?? 0) ?? url.pathname.replace(pagePath, "");
@@ -157,8 +220,8 @@ type Decisions = import("./protocol.js").Decisions;
   }
 
   function numberedGroup(root: Element) {
-    if (root.children.length < 3 || root.children.length > 34 || root.closest("[role=grid],[role=tablist],dialog")) return;
-    const controls = [...root.querySelectorAll(controlSelector)];
+    if (root.children.length < 3 || root.children.length > 34 || root.closest(nonPagination)) return;
+    const controls = [...root.querySelectorAll<HTMLElement>(controlSelector)];
     if (controls.length > 32) return;
     const numbers: number[] = [];
     const pages: { route: string; value: number; number: number }[] = [];
@@ -221,12 +284,15 @@ type Decisions = import("./protocol.js").Decisions;
       const group = current.closest("ul,ol,nav,[role=navigation]");
       if (group && ![...roots].some(root => root.contains(group))) roots.add(group);
     }
-    const groups = [...roots].filter(root => ![...roots].some(other => other !== root && other.contains(root))).map(root => {
-      const controls = [...root.querySelectorAll(controlSelector)];
+    const groups: Group[] = [...roots].filter(root => !root.closest(nonPagination) &&
+      ![...roots].some(other => other !== root && other.contains(root))).flatMap(root => {
+      const controls = [...root.querySelectorAll<HTMLElement>(controlSelector)];
       const current = currentControl(root, controls);
       const currentPage = current && numberOf(current);
-      return { root, controls, current, currentPage };
-    }).filter(group => group.controls.length > 0 && (group.currentPage !== undefined || group.controls.length <= 32));
+      return controls.length && (currentPage !== undefined || routeEvidence(controls, currentPage))
+        ? [{ root, controls, current, currentPage }]
+        : [];
+    });
     const seen = new Set<Element>();
     for (const anchor of document.querySelectorAll<HTMLAnchorElement>("a[href]")) {
       const page = numberOf(anchor);
@@ -245,7 +311,8 @@ type Decisions = import("./protocol.js").Decisions;
   }
 
   function fingerprint(node: HTMLElement) {
-    return JSON.stringify([node instanceof HTMLAnchorElement ? node.href : null, directionOf(node), numberOf(node)]);
+    return JSON.stringify([node instanceof HTMLAnchorElement ? node.href : null, directionOf(node), numberOf(node),
+      label(node).join("\n").slice(0, 1024)]);
   }
 
   function addressDirection(href: string, indexAlias = false): Direction | undefined {
@@ -313,13 +380,13 @@ type Decisions = import("./protocol.js").Decisions;
       }
       const rel = direction === "next" ? "next" : "prev";
       const candidates = new Map<string | HTMLElement, HTMLElement>();
-      for (const { controls, current, currentPage } of groups) {
+      for (const group of groups) {
+        const { controls, current, currentPage } = group;
         const adjacent = currentPage === undefined ? undefined : currentPage + (direction === "next" ? 1 : -1);
-        const available = controls.filter(usable).filter(control => {
-          if (current?.contains(control)) return false;
-          const address = control instanceof HTMLAnchorElement ? addressDirection(control.href) : undefined;
-          return address === undefined || address === direction;
-        });
+        const available = controls.filter(usable).filter(control =>
+          !current?.contains(control) && automatic(group, control) &&
+          (!(control instanceof HTMLAnchorElement) || pageDirection(control, group) === direction),
+        );
         const named = available.filter(control => directionOf(control) === direction);
         const adjacentControls = available.filter(control => adjacent !== undefined && numberOf(control) === adjacent);
         const adjacentKeys = new Set(adjacentControls.map(destinationKey));
@@ -349,12 +416,14 @@ type Decisions = import("./protocol.js").Decisions;
 
     const candidates: { target: HTMLElement; data: CandidateShape }[] = [];
     if (groups.length === 1) {
-      const { controls, current, currentPage } = groups[0];
+      const group = groups[0];
+      const { controls, current, currentPage } = group;
       const resolvedDestinations = new Set(Object.values(solid).map(destinationKey));
       for (const [position, target] of controls.entries()) {
-        if (!usable(target) || current?.contains(target) || resolvedDestinations.has(destinationKey(target))) continue;
+        if (!usable(target) || current?.contains(target) || resolvedDestinations.has(destinationKey(target)) ||
+            !automatic(group, target)) continue;
         const targetPage = numberOf(target);
-        const cue = (target instanceof HTMLAnchorElement ? addressDirection(target.href) : undefined) ?? directionOf(target);
+        const cue = (target instanceof HTMLAnchorElement ? pageDirection(target, group) : undefined) ?? directionOf(target);
         const difference = targetPage === undefined || currentPage === undefined ? 0 : targetPage - currentPage;
         if (targetPage !== undefined && Math.abs(difference) !== 1) continue;
         if (targetPage === undefined && cue === "unknown" &&
@@ -369,7 +438,7 @@ type Decisions = import("./protocol.js").Decisions;
     return { solid, candidates, group: groups.length === 1 ? groups[0] : undefined };
   }
 
-  async function scan(allowClassification = true) {
+  function inspectTargets() {
     if (!enabled) return;
     if (documentURL !== location.href) {
       documentURL = location.href;
@@ -377,7 +446,6 @@ type Decisions = import("./protocol.js").Decisions;
       assisted = {};
       classificationAttempt = undefined;
     }
-    const address = location.href;
     const found = inspect();
     for (const direction of directions) {
       const previousDecision = assisted[direction];
@@ -388,6 +456,13 @@ type Decisions = import("./protocol.js").Decisions;
     }
     targets = { ...assisted, ...found.solid };
     for (const target of Object.values(targets)) fingerprints.set(target, fingerprint(target));
+    return found;
+  }
+
+  async function scan(allowClassification = true) {
+    const address = location.href;
+    const found = inspectTargets();
+    if (!found) return;
     const needed = directions.filter(direction => !targets[direction]);
     if (!allowClassification || !needed.length || !found.candidates.length || found.candidates.length > 8) return;
     const data = { needed, hasCurrent: Boolean(found.group?.current), candidates: found.candidates.map(candidate => candidate.data) };
@@ -466,19 +541,36 @@ type Decisions = import("./protocol.js").Decisions;
     void scan();
   }
 
+  function eligibleAtActuation(direction: Direction, inspected?: ReturnType<typeof inspect>) {
+    const target = targets[direction];
+    if (!enabled || documentURL !== location.href || !target ||
+        fingerprints.get(target) !== fingerprint(target) || !usable(target)) return;
+    const fresh = inspected ?? inspect();
+    if (fresh.solid[direction] === target) return target;
+    if (assisted[direction] !== target) return;
+    const candidate = fresh.candidates.find(candidate => candidate.target === target);
+    if (!candidate) return;
+    if (candidate.data.cue !== "unknown") {
+      return activationEvidence(fresh.group, target, direction) ? target : undefined;
+    }
+    if (candidate.data.relation === (direction === "next" ? -1 : 1)) return;
+    return target;
+  }
+
   chrome.runtime.onMessage.addListener((message: unknown) => {
     if (typeof message === "object" && message !== null && "type" in message && message.type === "refresh") void refresh();
   });
   window.addEventListener("popstate", schedule);
   (window as Window & { navigation?: EventTarget }).navigation?.addEventListener("currententrychange", schedule);
   window.addEventListener("keydown", event => {
-    if (!enabled || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
+    if (!enabled || !event.isTrusted || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey ||
+        event.altKey || event.metaKey || event.ctrlKey) return;
     const direction = event.key === "ArrowLeft" ? "previous" : event.key === "ArrowRight" ? "next" : undefined;
     if (!direction || event.composedPath().some(node => node instanceof Element && node.closest(protectedControls))) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
-    if (timer !== undefined || documentURL !== location.href) void scan(false);
-    const target = targets[direction];
-    if (!target || !usable(target) || fingerprints.get(target) !== fingerprint(target)) return;
+    const inspected = timer !== undefined || documentURL !== location.href ? inspectTargets() : undefined;
+    const target = eligibleAtActuation(direction, inspected);
+    if (!target) return;
     for (const media of document.querySelectorAll<HTMLMediaElement>("video,audio")) {
       if (media.paused || media.ended) continue;
       if (media instanceof HTMLVideoElement && media.muted && media.loop && !media.controls) continue;
