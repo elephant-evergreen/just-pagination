@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { patchSelectorEngine } from "../tools/pagination-eval/harness.ts";
+import type { Direction } from "../src/protocol.ts";
 
 type Page = {
   clicks: string[];
+  fallback: Direction[];
   root: HTMLElement;
   press(key?: string, repeat?: boolean): boolean;
   cover(control: string): void;
@@ -38,6 +40,7 @@ async function withPage(html: string, run: (page: Page) => void, enabled = true,
   }
   document.elementFromPoint = x => hits.get(x) ?? null;
   const clicks: string[] = [];
+  const fallback: Direction[] = [];
   document.addEventListener("click", event => {
     clicks.push((event.target as HTMLElement).id);
     event.preventDefault();
@@ -47,7 +50,11 @@ async function withPage(html: string, run: (page: Page) => void, enabled = true,
     window, document, location: window.location,
     chrome: { runtime: {
       onMessage: { addListener() {} },
-      sendMessage: async (message: { type: string }) => message.type === "content-status" ? enabled : {},
+      sendMessage: async (message: { type: "content-status" } | { type: "classify"; data: { needed: Direction[] } }) => {
+        if (message.type === "content-status") return enabled;
+        fallback.push(...message.data.needed);
+        return {};
+      },
     } },
     Element: window.Element,
     HTMLElement: window.HTMLElement,
@@ -67,6 +74,7 @@ async function withPage(html: string, run: (page: Page) => void, enabled = true,
     await new Promise(resolve => setTimeout(resolve, 0));
     run({
       clicks,
+      fallback,
       root: document.body,
       press(key = "ArrowRight", repeat = false) {
         const event = new window.KeyboardEvent("keydown", { key, repeat, bubbles: true, cancelable: true });
@@ -129,6 +137,33 @@ test("numbered pagination wins over an append control", async () => {
     expect(press()).toBe(true);
     expect(clicks).toEqual(["next"]);
   });
+});
+
+test("numbered links distinguish the previous page from a distant earlier page", async () => {
+  const pager = '<nav aria-label="Pagination"><a href="?start=0"><svg></svg></a>' +
+    '<a href="?start=48"><svg></svg></a><a id="first" href="?start=0">1</a>' +
+    '<a id="previous" href="?start=48">7</a><a id="next" href="?start=64">9</a></nav>';
+  await withPage(pager, ({ clicks, fallback, press }) => {
+    expect(press("ArrowLeft")).toBe(true);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["previous", "next"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?start=56");
+  await withPage(pager.replace('id="next" href="?start=64"', 'id="next" href="?start=64&sort=price"'), ({ clicks, press }) => {
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual([]);
+  }, true, "/list?start=56");
+});
+
+test("forward-only controls do not need a decision for the previous page", async () => {
+  const pager = '<nav aria-label="Pagination"><a id="next" rel="next" href="?page=2">Next</a>' +
+    '<a href="?page=5"><svg></svg></a></nav>';
+  await withPage(pager, ({ clicks, fallback, press }) => {
+    expect(press("ArrowLeft")).toBe(false);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["next"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=1");
 });
 
 test("load more follows successive links when the address stays on the first page", async () => {

@@ -27,6 +27,7 @@ type Decisions = import("./protocol.js").Decisions;
   const directions = ["previous", "next"] as const;
   type Targets = Partial<Record<Direction, HTMLElement>>;
   type Group = { root: Element; controls: HTMLElement[]; current?: Element; currentPage?: number };
+  type NumberedAddress = NonNullable<ReturnType<typeof pageAddress>> & { number: number };
   const paginationSelector = "nav,[role=navigation],[class*=paginat i],[class*=pager i],[class*=pagenav i],[class*=page-nav i],[data-pagination]";
   const selectedSelector = '.active,.selected,.current,.is-current,[class$="--current"],[class*="--current "],[aria-label^="Current page," i]';
   const currentSelector = "[aria-current=page],[aria-current=true]";
@@ -156,6 +157,35 @@ type Decisions = import("./protocol.js").Decisions;
     if (suffix && Number(suffix[1]) === page) return url.pathname.slice(0, -suffix[0].length);
   }
 
+  function numberedPageStep(pages: NumberedAddress[]) {
+    const first = pages[0];
+    const second = first && pages.find(page => page.number !== first.number);
+    if (!first || !second) return;
+    const step = (second.value - first.value) / (second.number - first.number);
+    if (Number.isInteger(step) && step > 0 && pages.every(page =>
+      page.route === first.route && page.value - first.value === (page.number - first.number) * step)) return step;
+  }
+
+  function pageFromNumberedLinks(controls: HTMLElement[], url: URL) {
+    const current = pageAddress(url);
+    if (!current) return;
+    const pages: NumberedAddress[] = [];
+    for (const control of controls) {
+      if (!(control instanceof HTMLAnchorElement) || !usable(control)) continue;
+      const number = numberOf(control);
+      if (number === undefined) continue;
+      const address = pageAddress(new URL(control.href));
+      if (address?.route === current.route) pages.push({ ...address, number });
+    }
+    const step = numberedPageStep(pages);
+    if (step === undefined) return;
+    const first = pages[0];
+    const number = first.number + (current.value - first.value) / step;
+    if (Number.isInteger(number) && number >= 1 &&
+        pages.some(page => page.number === number - 1) &&
+        pages.some(page => page.number === number + 1)) return number;
+  }
+
   function inferredPage(controls: HTMLElement[], current: URL) {
     const segment = current.pathname.match(numberedPath)?.[0];
     if (!segment) return;
@@ -273,7 +303,7 @@ type Decisions = import("./protocol.js").Decisions;
     const controls = [...root.querySelectorAll<HTMLElement>(controlSelector)];
     if (controls.length > 32) return;
     const numbers: number[] = [];
-    const pages: { route: string; value: number; number: number }[] = [];
+    const pages: NumberedAddress[] = [];
     const pathPages: { control: HTMLAnchorElement; base: string; number: number }[] = [];
     let current: Element | undefined;
     for (const child of root.children) {
@@ -309,10 +339,7 @@ type Decisions = import("./protocol.js").Decisions;
     if (currentPage === undefined) return;
     if (selectedPage !== undefined && !numbers.some((page, index) => page === numbers[index - 1] + 1)) return;
     if (pages.length >= 2) {
-      const [first, second] = pages;
-      const step = (second.value - first.value) / (second.number - first.number);
-      if (!Number.isInteger(step) || step < 1 || !pages.every(page =>
-        page.route === first.route && page.value - first.value === (page.number - first.number) * step)) return;
+      if (numberedPageStep(pages) === undefined) return;
     } else {
       const currentURL = new URL(location.href);
       const base = currentPage === 1 ? currentURL.pathname.replace(/\/$/, "") : numberedPathBase(currentURL, currentPage);
@@ -339,7 +366,8 @@ type Decisions = import("./protocol.js").Decisions;
       ![...roots].some(other => other !== root && other.contains(root))).flatMap(root => {
       const controls = [...root.querySelectorAll<HTMLElement>(controlSelector)];
       const current = currentControl(root, controls);
-      const currentPage = current ? numberOf(current) : inferredPage(controls, new URL(location.href));
+      const url = new URL(location.href);
+      const currentPage = current ? numberOf(current) : inferredPage(controls, url) ?? pageFromNumberedLinks(controls, url);
       return controls.length && (currentPage !== undefined || routeEvidence(controls, currentPage))
         ? [{ root, controls, current, currentPage }]
         : [];
@@ -682,12 +710,15 @@ type Decisions = import("./protocol.js").Decisions;
     return found;
   }
 
-  async function scan(allowClassification = true) {
+  async function scan() {
     const address = location.href;
     const found = inspectTargets();
     if (!found) return;
-    const needed = directions.filter(direction => !targets[direction]);
-    if (!allowClassification || !needed.length || !found.candidates.length || found.candidates.length > 8) return;
+    if (!found.candidates.length || found.candidates.length > 8) return;
+    const needed = directions.filter(direction => !targets[direction] && found.candidates.some(({ data }) =>
+      (data.cue === "unknown" || data.cue === direction) && data.relation !== (direction === "next" ? -1 : 1),
+    ));
+    if (!needed.length) return;
     const data = { needed, hasCurrent: Boolean(found.group?.current), candidates: found.candidates.map(candidate => candidate.data) };
     const layout = found.group && classificationLayout(found.group.root, found.group.currentPage, found.candidates.map(candidate => candidate.target));
     const signature = JSON.stringify([layout, data]);
