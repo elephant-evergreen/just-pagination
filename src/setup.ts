@@ -1,7 +1,7 @@
 import { imageSource, pages } from "./gallery-data.js";
 import type { ArrowKey, ConnectionResult, SetupStatus } from "./protocol.js";
 
-const board = document.querySelector<HTMLElement>(".board")!;
+const gallery = document.querySelector<HTMLElement>(".gallery")!;
 const form = document.querySelector<HTMLFormElement>("#connection")!;
 const field = document.querySelector<HTMLInputElement>(".field")!;
 const note = document.querySelector<HTMLElement>(".form-note")!;
@@ -60,18 +60,17 @@ function drawPage() {
     image.src = imageSource(photo.href);
     return link;
   }));
-  previous.disabled = !connected || page === 1;
-  next.disabled = !connected || page === pages.length;
+  previous.disabled = page === 1;
+  next.disabled = page === pages.length;
   pageStatus.textContent = "Page " + page + " of " + pages.length;
   indicators.forEach((indicator, index) => {
-    indicator.disabled = !connected;
     if (index === page - 1) indicator.setAttribute("aria-current", "page");
     else indicator.removeAttribute("aria-current");
   });
 }
 
 function selectPage(destination: number) {
-  if (!connected || busy || destination === page || destination < 1 || destination > pages.length) return;
+  if (destination === page || destination < 1 || destination > pages.length) return;
   const focused = document.activeElement;
   page = destination;
   drawPage();
@@ -106,10 +105,8 @@ function renderForm() {
 }
 
 function renderConnection() {
-  board.classList.toggle("state-connected", connected);
   field.value = connected ? "••••••••••••••••" : "";
   status.textContent = connected ? "Jev connected" : "Jev disconnected";
-  drawPage();
 }
 
 function clearError() {
@@ -139,7 +136,6 @@ form.addEventListener("submit", async event => {
         return;
       }
       connected = false;
-      page = startPage;
     } else {
       const result = await chrome.runtime.sendMessage({ type: "connect", key: field.value }) as ConnectionResult | null;
       if (result !== "connected") {
@@ -164,7 +160,7 @@ form.addEventListener("submit", async event => {
 previous.addEventListener("click", () => selectPage(page - 1));
 next.addEventListener("click", () => selectPage(page + 1));
 document.addEventListener("keydown", event => {
-  if (!connected || busy || event.defaultPrevented || event.repeat || event.isComposing ||
+  if (event.defaultPrevented || event.repeat || event.isComposing ||
       event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
   if (event.target instanceof Element && event.target.closest("input:not([readonly]),textarea,select,[contenteditable]:not([contenteditable=false])")) return;
   if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -190,8 +186,9 @@ try {
   renderConnection();
 } catch {
   showError("Could not load settings. Reload this page.");
-  drawPage();
 } finally {
+  drawPage();
+  gallery.classList.add("ready");
   busy = false;
   renderForm();
 }

@@ -13,7 +13,7 @@ async function preferences() {
   await protectedStorage;
   const { jevKey, jevConnection, pausedSites } = await local.get(["jevKey", "jevConnection", "pausedSites"]);
   return {
-    key: typeof jevKey === "string" ? jevKey : undefined,
+    key: typeof jevKey === "string" && jevKey.length > 0 ? jevKey : undefined,
     connection: typeof jevConnection === "string" ? jevConnection : "",
     disabled: Array.isArray(pausedSites) ? [...new Set(pausedSites.flatMap(site => {
       const host = typeof site === "string" ? enteredHost(site) : undefined;
@@ -25,8 +25,7 @@ async function preferences() {
 async function siteStatus(url?: string): Promise<SiteInfo> {
   const host = siteHost(url);
   if (!host || !url) return { status: "unsupported" };
-  const { key, disabled } = await preferences();
-  if (!key) return { host, status: "disconnected" };
+  const { disabled } = await preferences();
   if (disabled.includes(host)) return { host, status: "disabled" };
   const { protocol, hostname } = new URL(url);
   const permitted = await chrome.permissions.contains({ origins: [protocol + "//" + hostname + "/*"] });
@@ -46,10 +45,10 @@ function setDisabled(host: string, disabled: boolean) {
   return update.then(() => true);
 }
 
-async function refreshTabs() {
+async function refreshTabs(jevChanged = false) {
   const tabs = await chrome.tabs.query({});
   await Promise.allSettled(tabs.filter(tab => tab.id !== undefined).map(tab =>
-    chrome.tabs.sendMessage(tab.id!, { type: "refresh" }),
+    chrome.tabs.sendMessage(tab.id!, { type: "refresh", jevChanged }),
   ));
 }
 
@@ -62,17 +61,17 @@ chrome.runtime.onInstalled.addListener(details => {
 let classificationQueue = Promise.resolve();
 const pendingClassifications = new Map<string, Promise<Decisions>>();
 
-async function cachedClassification(key: string, documentId: string, data: Classification, cacheKey: string): Promise<Decisions> {
+async function cachedClassification(key: string, documentId: string, data: Classification, cacheKey: string, revision: number): Promise<Decisions> {
   const pending = pendingClassifications.get(cacheKey);
   if (pending) return pending;
   const operation = (async () => {
     const storageKey = "jev:" + cacheKey;
     const saved = (await chrome.storage.session.get(storageKey))[storageKey];
+    if (revision !== connectionRevision) return {};
     if (isRecord(saved) && typeof saved.until === "number" && saved.until > Date.now() && isRecord(saved.decisions)) {
       return saved.decisions as Decisions;
     }
-    const revision = connectionRevision;
-    if (!await reserveClassification(documentId)) return {};
+    if (!await reserveClassification(documentId) || revision !== connectionRevision) return {};
     const decisions = await classify(key, data);
     if (revision !== connectionRevision) return {};
     if (data.needed.every(direction => Object.hasOwn(decisions, direction))) {
@@ -128,7 +127,7 @@ async function handle(message: Record<string, unknown>, sender: chrome.runtime.M
         await protectedStorage;
         if (revision !== connectionRevision) return "unavailable";
         await local.set({ jevKey: key, jevConnection: crypto.randomUUID() });
-        void refreshTabs();
+        void refreshTabs(true);
       }
       return result;
     }
@@ -136,7 +135,7 @@ async function handle(message: Record<string, unknown>, sender: chrome.runtime.M
       connectionRevision++;
       await protectedStorage;
       await local.remove(["jevKey", "jevConnection"]);
-      void refreshTabs();
+      void refreshTabs(true);
       return true;
     }
     if (message.type === "tried-arrow" && (message.key === "ArrowLeft" || message.key === "ArrowRight")) {
@@ -164,16 +163,19 @@ async function handle(message: Record<string, unknown>, sender: chrome.runtime.M
   if (!sender.tab || sender.frameId !== 0 || !siteHost(sender.url)) return;
   if (message.type === "content-status") return (await siteStatus(sender.url)).status === "ready";
   if (message.type === "classify") {
+    const revision = connectionRevision;
     const data = parseClassification(message.data);
     if (!data || !sender.documentId || (await siteStatus(sender.url)).status !== "ready") return {};
     const { key, connection } = await preferences();
-    if (!key) return {};
+    if (!key || revision !== connectionRevision) return {};
     if (typeof message.layout === "string" && message.layout.length > 0 && message.layout.length <= 8192 && sender.url) {
       const cacheKey = await classificationKey(new URL(sender.url), message.layout, data, connection);
-      return cachedClassification(key, sender.documentId, data, cacheKey);
+      if (revision !== connectionRevision) return {};
+      return cachedClassification(key, sender.documentId, data, cacheKey, revision);
     }
-    if (!await reserveClassification(sender.documentId)) return {};
-    return classify(key, data);
+    if (!await reserveClassification(sender.documentId) || revision !== connectionRevision) return {};
+    const decisions = await classify(key, data);
+    return revision === connectionRevision ? decisions : {};
   }
 }
 

@@ -34,6 +34,7 @@ function storage(values: Record<string, unknown>) {
 
 async function mockWorker(respond: (request: number) => Response, saved: Record<string, unknown> = {}) {
   let receive: MessageListener | undefined;
+  let permitted = true;
   let requests = 0;
   let documents = 0;
   const session: Record<string, unknown> = {};
@@ -48,7 +49,7 @@ async function mockWorker(respond: (request: number) => Response, saved: Record<
   spyOn(globalThis, "fetch").mockImplementation(fetchMock);
   const mockChrome = {
     storage: { local: storage({ jevKey: "test-key", ...saved }), session: storage(session) },
-    permissions: { contains: async () => true, onAdded: event, onRemoved: event },
+    permissions: { contains: async () => permitted, onAdded: event, onRemoved: event },
     tabs: { query: async () => [] },
     runtime: {
       id: "test",
@@ -61,24 +62,29 @@ async function mockWorker(respond: (request: number) => Response, saved: Record<
   await import(`../dist/background.js?test=${crypto.randomUUID()}`);
   const listener = receive;
   if (!listener) throw new Error("Expected a browser message listener");
+  const sendContent = (url: string, message: Record<string, unknown>) => {
+    const sender: chrome.runtime.MessageSender = {
+      id: mockChrome.runtime.id,
+      frameId: 0,
+      tab: { id: 1, groupId: -1, index: 0, pinned: false,
+        highlighted: false, windowId: 1, active: true, incognito: false, selected: true,
+        discarded: false, autoDiscardable: true, frozen: false, lastAccessed: 0 },
+      url,
+      documentId: String(++documents),
+    };
+    return new Promise<unknown>(resolve => listener(message, sender, resolve));
+  };
   return {
     session,
     requestCount: () => requests,
+    setPermission(allowed: boolean) { permitted = allowed; },
+    contentStatus: (url: string) => sendContent(url, { type: "content-status" }),
     send(path: string, message: Record<string, unknown>) {
       const sender = { id: mockChrome.runtime.id, url: mockChrome.runtime.getURL(path) };
       return new Promise<unknown>(resolve => listener(message, sender, resolve));
     },
-    classify(url: string, layout = "/list") {
-      const sender: chrome.runtime.MessageSender = {
-        id: mockChrome.runtime.id,
-        frameId: 0,
-        tab: { id: 1, groupId: -1, index: 0, pinned: false,
-          highlighted: false, windowId: 1, active: true, incognito: false, selected: true,
-          discarded: false, autoDiscardable: true, frozen: false, lastAccessed: 0 },
-        url,
-        documentId: String(++documents),
-      };
-      return new Promise<Decisions | null>(resolve => listener({ type: "classify", data, layout }, sender, resolve));
+    async classify(url: string, layout = "/list") {
+      return await sendContent(url, { type: "classify", data, layout }) as Decisions | null;
     },
   };
 }
@@ -86,6 +92,35 @@ async function mockWorker(respond: (request: number) => Response, saved: Record<
 function answer(choice: string, probability = 0.98) {
   return Response.json({ answers: { next: { type: "choice", choice, confidence: 0.97, probabilities: { [choice]: probability } } } });
 }
+
+test("local navigation works without a key and still respects site controls", async () => {
+  const worker = await mockWorker(() => answer("c1"), { jevKey: undefined });
+  expect(await worker.contentStatus(site)).toBe(true);
+  expect(await worker.send("popup.html", { type: "site-status", url: site })).toStrictEqual({
+    host: "example.test", status: "ready",
+  });
+  expect(await worker.classify(site)).toStrictEqual({});
+  expect(worker.requestCount()).toBe(0);
+  expect(worker.session).toStrictEqual({});
+  expect(await worker.send("popup.html", {
+    type: "set-site-disabled", host: "example.test", disabled: true,
+  })).toBe(true);
+  expect(await worker.contentStatus(site)).toBe(false);
+  worker.setPermission(false);
+  expect(await worker.contentStatus("https://other.test")).toBe(false);
+  expect(await worker.send("popup.html", { type: "site-status", url: "https://other.test" })).toStrictEqual({
+    host: "other.test", status: "no-access",
+  });
+});
+
+test("disconnecting stops Jev without turning off local navigation", async () => {
+  const worker = await mockWorker(() => answer("c1"));
+  expect(await worker.classify(site)).toStrictEqual({ next: 1 });
+  expect(await worker.send("settings.html", { type: "disconnect" })).toBe(true);
+  expect(await worker.contentStatus(site)).toBe(true);
+  expect(await worker.classify(site)).toStrictEqual({});
+  expect(worker.requestCount()).toBe(1);
+});
 
 test("reuses decisions across pages and keeps origins and layouts independent", async () => {
   const worker = await mockWorker(() => answer("c1"));

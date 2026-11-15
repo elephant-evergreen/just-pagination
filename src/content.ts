@@ -39,7 +39,7 @@ type Decisions = import("./protocol.js").Decisions;
   let targets: Targets = {};
   let timer: number | undefined;
   let documentURL = location.href;
-  let classificationAttempt: string | undefined;
+  let classificationAttempt: { signature: string } | undefined;
   let assisted: Targets = {};
   let inspectedRoots: Element[] = [];
   const fingerprints = new WeakMap<HTMLElement, string>();
@@ -684,8 +684,9 @@ type Decisions = import("./protocol.js").Decisions;
     if (!allowClassification || !needed.length || !found.candidates.length || found.candidates.length > 8) return;
     const data = { needed, hasCurrent: Boolean(found.group?.current), candidates: found.candidates.map(candidate => candidate.data) };
     const layout = found.group && classificationLayout(found.group.root, found.group.currentPage, found.candidates.map(candidate => candidate.target));
-    const attempt = JSON.stringify([layout, data]);
-    if (classificationAttempt === attempt) return;
+    const signature = JSON.stringify([layout, data]);
+    if (classificationAttempt?.signature === signature) return;
+    const attempt = { signature };
     classificationAttempt = attempt;
     try {
       const decisions = await chrome.runtime.sendMessage({ type: "classify", data, layout }) as Decisions | undefined;
@@ -733,12 +734,16 @@ type Decisions = import("./protocol.js").Decisions;
     }
   });
 
-  async function refresh() {
+  async function refresh(jevChanged = false) {
     const revision = ++refreshRevision;
     enabled = false;
     observer.disconnect();
     targets = {};
     pendingLoadMore = undefined;
+    if (jevChanged) {
+      assisted = {};
+      classificationAttempt = undefined;
+    }
     let permitted = false;
     try {
       permitted = await chrome.runtime.sendMessage({ type: "content-status" }) === true;
@@ -776,7 +781,9 @@ type Decisions = import("./protocol.js").Decisions;
   }
 
   chrome.runtime.onMessage.addListener((message: unknown) => {
-    if (typeof message === "object" && message !== null && "type" in message && message.type === "refresh") void refresh();
+    if (typeof message === "object" && message !== null && "type" in message && message.type === "refresh") {
+      void refresh("jevChanged" in message && message.jevChanged === true);
+    }
   });
   window.addEventListener("popstate", schedule);
   (window as Window & { navigation?: EventTarget }).navigation?.addEventListener("currententrychange", schedule);
