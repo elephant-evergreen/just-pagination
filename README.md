@@ -35,3 +35,5 @@ mise run check
 ```
 
 This builds `dist/` and runs the tests. Run `mise exec -- bun fmt` to format code. See the [release guide](RELEASE.md) to package a version for distribution.
+
+When you add, remove, or update a workflow dependency, regenerate and commit `.github/workflows/actions.lock` with `gh actions-lock`. [GitHub's lockfile guide](https://docs.github.com/en/actions/how-tos/secure-your-work/lock-workflow-dependencies)
