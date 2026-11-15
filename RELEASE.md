@@ -17,6 +17,8 @@ A version tag creates a draft GitHub release with the ZIP, its SHA-256 checksum,
 
 If **Release** fails, read the failed step in Actions. To retry a failed upload, delete any incomplete draft and rerun the job. If you need to change the tagged code or have already uploaded that version to Chrome Web Store, prepare the next version.
 
+After installing the [source build dependencies](README.md#build-from-source), run `mise run package` with `zip` installed. Find both files in `artifacts/`.
+
 ## Verify the draft package
 
 Extract the ZIP. Load the folder containing `manifest.json` through **Load unpacked** in desktop Chrome. Connect with a dedicated test key, try both arrow keys and a page number in the gallery, and turn pages on a real list. Check that the shortcut leaves focused inputs alone. Use the popup to disable and enable the site. For an update, check that saved settings still work.

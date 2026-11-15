@@ -1,6 +1,25 @@
 [tools]
-node = "26.12.1"
-pnpm = "12.18.0"
+bun = "1.4.4"
+
+[tasks.build]
+run = [
+  '''
+bun -e '
+import { globSync, rmSync, statSync } from "node:fs";
+const sources = globSync("**/*.{js,cjs,mjs,jsx}", { exclude: ["node_modules", "dist", "artifacts"] })
+  .filter(path => !statSync(path, { throwIfNoEntry: false })?.isDirectory());
+if (sources.length) throw new Error("Use TypeScript for source files: " + sources.join(", "));
+rmSync("dist", { recursive: true, force: true });
+'
+''',
+  "find src -type f -name '*.ts' ! -name '*.d.ts' -exec bun build --check --no-bundle --target=browser --root=src --outdir=dist {} +",
+  "cp -R extension/. dist/",
+]
 
 [tasks.check]
-run = "pnpm check"
+depends = ["build"]
+run = ["bun check -p tsconfig.tools.json", "bun test ./test"]
+
+[tasks.package]
+depends = ["check"]
+run = "bun package-chrome.ts"

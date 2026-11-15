@@ -20,5 +20,5 @@ jobs:
         with:
           version: '2026.10.17'
           cache: false
-      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: mise exec -- bun install --frozen-lockfile
       - run: mise run check

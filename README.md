@@ -30,8 +30,8 @@ Clone this repository or [download the source ZIP](https://github.com/elephant-e
 
 ```sh
 mise install
-mise exec -- pnpm install --frozen-lockfile --ignore-scripts
+mise exec -- bun install --frozen-lockfile
 mise run check
 ```
 
-This builds `dist/` and runs the tests. See the [release guide](RELEASE.md) to package a version for distribution.
+This builds `dist/` and runs the tests. Run `mise exec -- bun fmt` to format code. See the [release guide](RELEASE.md) to package a version for distribution.
