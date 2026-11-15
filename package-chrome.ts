@@ -1,7 +1,6 @@
 import { $ } from "bun";
 import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
-import { pages } from "./src/gallery-data.ts";
 
 const root = import.meta.dir;
 const dist = join(root, "dist");
@@ -23,7 +22,6 @@ const runtimeFiles = [
   "background.js", "content.js", "controls.css", "gallery-data.js", "jev.js", "manifest.json", "photo-credits.html",
   "popup.css", "popup.html", "popup.js", "protocol.js", "settings.html", "setup.css", "setup.js", "sites.js",
   "assets/Mulish-OFL.txt", "assets/icon.png", "assets/icon-16.png", "assets/icon-32.png", "assets/icon-48.png", "assets/keyboard-cat.png", "assets/mulish.woff2",
-  ...new Set(pages.flat().map(photo => photo.src)),
 ].sort();
 const builtFiles = readdirSync(dist, { recursive: true, withFileTypes: true }).filter(entry => !entry.isDirectory());
 const builtPaths = new Set(builtFiles.map(entry => relative(dist, join(entry.parentPath, entry.name))));

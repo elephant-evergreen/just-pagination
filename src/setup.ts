@@ -1,4 +1,4 @@
-import { pages } from "./gallery-data.js";
+import { imageSource, pages } from "./gallery-data.js";
 import type { ArrowKey, ConnectionResult, SetupStatus } from "./protocol.js";
 
 const board = document.querySelector<HTMLElement>(".board")!;
@@ -44,11 +44,20 @@ function drawPage() {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     const image = document.createElement("img");
-    image.src = photo.src;
     image.alt = photo.alt;
+    image.referrerPolicy = "no-referrer";
     if (photo.y) image.style.setProperty("--y", photo.y + "%");
     if (photo.smallY) image.style.setProperty("--small-y", photo.smallY + "%");
+    image.addEventListener("error", () => {
+      link.classList.add("unavailable");
+      link.setAttribute("aria-label", `${photo.alt}. Photo unavailable; open on Pexels.`);
+      const fallback = document.createElement("span");
+      fallback.className = "photo-fallback";
+      fallback.textContent = "Photo unavailable — view on Pexels";
+      image.replaceWith(fallback);
+    }, { once: true });
     link.append(image);
+    image.src = imageSource(photo.href);
     return link;
   }));
   previous.disabled = !connected || page === 1;
@@ -171,7 +180,6 @@ document.addEventListener("keydown", event => {
   tapKeyboardCat();
 });
 
-drawPage();
 try {
   const connection = await chrome.runtime.sendMessage({ type: "setup-status" }) as SetupStatus | null;
   if (!connection) throw new Error("Setup status unavailable");
@@ -182,6 +190,7 @@ try {
   renderConnection();
 } catch {
   showError("Could not load settings. Reload this page.");
+  drawPage();
 } finally {
   busy = false;
   renderForm();
