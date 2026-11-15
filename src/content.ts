@@ -136,6 +136,31 @@ type Decisions = import("./protocol.js").Decisions;
     if (suffix && Number(suffix[1]) === page) return url.pathname.slice(0, -suffix[0].length);
   }
 
+  function inferredPage(controls: HTMLElement[], current: URL) {
+    const segment = current.pathname.match(numberedPath)?.[0];
+    if (!segment) return;
+    const currentPage = Number(segment.match(/\d+/)?.[0]);
+    const base = current.pathname.slice(0, -segment.length);
+    const pages = new Map<number, HTMLAnchorElement>();
+    const rel = (control: HTMLAnchorElement) => control.getAttribute("rel")?.toLowerCase().split(/\s+/) ?? [];
+    for (const control of controls) {
+      if (!(control instanceof HTMLAnchorElement) || !usable(control)) continue;
+      const page = numberOf(control);
+      if (page === undefined) continue;
+      const url = new URL(control.href);
+      if (url.origin !== current.origin || url.search !== current.search) continue;
+      const pageBase = numberedPathBase(url, page) ?? (page === 1 ? url.pathname.replace(/\/$/, "") : undefined);
+      if (pageBase === base) pages.set(page, control);
+    }
+    const previous = pages.get(currentPage - 1);
+    const next = pages.get(currentPage + 1);
+    if (!previous || !next || (!rel(previous).includes("prev") && !rel(previous).includes("previous")) ||
+        !rel(next).includes("next")) return;
+    return [...pages.keys()].some(page => page !== currentPage && Math.abs(page - currentPage) > 1)
+      ? currentPage
+      : undefined;
+  }
+
   function routeEvidence(controls: HTMLElement[], currentPage: number | undefined) {
     const current = new URL(location.href);
     const suffix = current.pathname.match(numberedPath);
@@ -172,10 +197,14 @@ type Decisions = import("./protocol.js").Decisions;
     const page = numberOf(control);
     if (page === undefined || group.currentPage === undefined) return;
     const url = new URL(control.href);
-    const base = numberedPathBase(url, page);
     const current = new URL(location.href);
     const currentBase = numberedPathBase(current, group.currentPage) ??
       (group.currentPage === 1 ? current.pathname.replace(/\/$/, "") : undefined);
+    const rel = control.getAttribute("rel")?.toLowerCase().split(/\s+/) ?? [];
+    const alias = page === 1 && group.currentPage === 2 && url.search === current.search &&
+      (rel.includes("prev") || rel.includes("previous")) &&
+      url.pathname.replace(/\/$/, "") === currentBase;
+    const base = numberedPathBase(url, page) ?? (alias ? currentBase : undefined);
     if (base === undefined || base !== currentBase || url.search !== current.search || page === group.currentPage) return;
     return page > group.currentPage ? "next" : "previous";
   }
@@ -254,9 +283,11 @@ type Decisions = import("./protocol.js").Decisions;
         }
       }
     }
-    if (numbers.length < 3 || !numbers.some((page, index) => page === numbers[index - 1] + 1)) return;
-    const currentPage = current && numberOf(current);
+    if (numbers.length < 3) return;
+    const selectedPage = current && numberOf(current);
+    const currentPage = selectedPage ?? (current ? undefined : inferredPage(controls, new URL(location.href)));
     if (currentPage === undefined) return;
+    if (selectedPage !== undefined && !numbers.some((page, index) => page === numbers[index - 1] + 1)) return;
     if (pages.length >= 2) {
       const [first, second] = pages;
       const step = (second.value - first.value) / (second.number - first.number);
@@ -288,7 +319,7 @@ type Decisions = import("./protocol.js").Decisions;
       ![...roots].some(other => other !== root && other.contains(root))).flatMap(root => {
       const controls = [...root.querySelectorAll<HTMLElement>(controlSelector)];
       const current = currentControl(root, controls);
-      const currentPage = current && numberOf(current);
+      const currentPage = current ? numberOf(current) : inferredPage(controls, new URL(location.href));
       return controls.length && (currentPage !== undefined || routeEvidence(controls, currentPage))
         ? [{ root, controls, current, currentPage }]
         : [];
