@@ -131,7 +131,7 @@ function installGlobals(window: Window, fallbackDirections: Set<Direction>) {
   setGlobal("getComputedStyle", window.getComputedStyle.bind(window));
 }
 
-function patchSelectorEngine(window: Window) {
+export function patchSelectorEngine(window: Window) {
   const normalize = (selector: string) => selector.replace(/\s+i\]/g, "]");
   const roots: object[] = [window.document, window.document.createElement("div")];
   for (const root of roots) {
