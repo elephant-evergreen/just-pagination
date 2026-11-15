@@ -131,6 +131,28 @@ test("numbered pagination wins over an append control", async () => {
   });
 });
 
+test("load more follows successive links when the address stays on the first page", async () => {
+  const link = '<a id="more" href="/list/page/2/">Load more articles</a>';
+  await withPage(`<main>${listing}${link}</main>`, ({ root, clicks, press, advanceClock }) => {
+    const control = root.querySelector("#more")!;
+    const items = root.querySelector("#items")!;
+    expect(press()).toBe(true);
+    control.setAttribute("href", "/list/page/3/");
+    expect(press()).toBe(false);
+    items.insertAdjacentHTML("beforeend", '<article><a href="/items/d">D</a></article>');
+    control.setAttribute("href", "/list/page/4/");
+    expect(press()).toBe(false);
+    control.setAttribute("href", "/list/page/3/?sort=price");
+    expect(press()).toBe(false);
+    control.setAttribute("href", "/list/page/3/");
+    expect(press()).toBe(true);
+    expect(press()).toBe(false);
+    advanceClock(5000);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["more", "more", "more"]);
+  });
+});
+
 test("an Ajax Load More widget can start with an empty append container", async () => {
   const widget = '<div class="ajax-load-more-wrap"><div><div class="alm-listing alm-ajax" data-posts-per-page="8"></div></div>' +
     '<div class="alm-btn-wrap"><button id="more" class="alm-load-more-btn loading">Load More</button></div></div>';

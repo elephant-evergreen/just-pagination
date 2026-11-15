@@ -43,8 +43,8 @@ type Decisions = import("./protocol.js").Decisions;
   let assisted: Targets = {};
   let inspectedRoots: Element[] = [];
   const fingerprints = new WeakMap<HTMLElement, string>();
-  type LoadMore = { control: HTMLElement; list: Element; itemCount: number };
-  let pendingLoadMore: { list: Element; itemCount: number; address: string; retryAt: number } | undefined;
+  type LoadMore = { control: HTMLElement; list: Element; itemCount: number; page?: ReturnType<typeof pageAddress> };
+  let pendingLoadMore: Omit<LoadMore, "control"> & { address: string; retryAt: number } | undefined;
 
   function safeDestination(raw: string): string | undefined {
     try {
@@ -518,19 +518,25 @@ type Decisions = import("./protocol.js").Decisions;
       if ((!isLoadMoreLabel(control) && !declaresManualLoadMore(control, ajaxListing?.list)) || !usable(control) ||
           control.closest("aside,details,form,header,footer,[aria-busy=true],.ajax-load-more-wrap.alm-loading") ||
           control.matches("[aria-expanded],[aria-haspopup],.alm-load-more-btn:is(.loading,.done)")) continue;
-      if (control instanceof HTMLAnchorElement) {
-        const next = pageAddress(new URL(control.href));
-        const current = pageAddress(new URL(location.href));
-        if (!next || next.value !== (current?.value ?? 1) + 1 || !adjacentAddress(control.href, "next")) continue;
-      }
+      const page = control instanceof HTMLAnchorElement ? pageAddress(new URL(control.href)) : undefined;
+      if (control instanceof HTMLAnchorElement && (!page || !adjacentAddress(control.href, "next"))) continue;
       const { left, top, width, height } = control.getBoundingClientRect();
       const underPointer = document.elementFromPoint(left + width / 2, top + height / 2);
       if (!underPointer || !control.contains(underPointer)) continue;
       const listing = ajaxListing ?? wooCommerceListing(control) ??
         (control.closest("article") ? undefined : listingBefore(control));
       if (!listing || listing.list.closest("[aria-busy=true]")) continue;
+      if (page) {
+        const current = pageAddress(new URL(location.href));
+        const pending = pendingLoadMore;
+        let next = (current?.value ?? 1) + 1;
+        if (pending?.page?.route === page.route && pending.address === location.href && pending.list === listing.list) {
+          next = pending.page.value + Number(listing.itemCount > pending.itemCount);
+        }
+        if (page.value !== next) continue;
+      }
       if (found) return;
-      found = { control, ...listing };
+      found = { control, ...listing, page };
     }
     if (!found) return;
     if (pendingLoadMore && (pendingLoadMore.list === found.list || pendingLoadMore.address === location.href ||
@@ -739,7 +745,6 @@ type Decisions = import("./protocol.js").Decisions;
     enabled = false;
     observer.disconnect();
     targets = {};
-    pendingLoadMore = undefined;
     if (jevChanged) {
       assisted = {};
       classificationAttempt = undefined;
@@ -807,7 +812,7 @@ type Decisions = import("./protocol.js").Decisions;
     event.preventDefault();
     if (more) {
       pendingLoadMore = {
-        list: more.list, itemCount: more.itemCount, address: location.href, retryAt: performance.now() + 5000,
+        list: more.list, itemCount: more.itemCount, page: more.page, address: location.href, retryAt: performance.now() + 5000,
       };
     }
     target.click();
