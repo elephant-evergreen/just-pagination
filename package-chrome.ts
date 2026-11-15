@@ -1,23 +1,21 @@
-import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { $ } from "bun";
+import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
 import { pages } from "./src/gallery-data.ts";
 
-const root = fileURLToPath(new URL("./", import.meta.url));
+const root = import.meta.dir;
 const dist = join(root, "dist");
-const manifest: { version?: unknown; manifest_version?: unknown } = JSON.parse(readFileSync(join(dist, "manifest.json"), "utf8"));
+const manifest: { version?: unknown; manifest_version?: unknown } = await Bun.file(join(dist, "manifest.json")).json();
 const { version } = manifest;
 if (manifest.manifest_version !== 3 || typeof version !== "string" || !/^(0|[1-9]\d{0,4})(\.(0|[1-9]\d{0,4})){2}$/.test(version) ||
     version === "0.0.0" || version.split(".").some(part => Number(part) > 65535)) {
   throw new Error("Expected a Manifest V3 extension with a valid three-part version.");
 }
 const tag = `v${version}`;
-if (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== tag) {
+if (Bun.env.GITHUB_REF_TYPE === "tag" && Bun.env.GITHUB_REF_NAME !== tag) {
   throw new Error(`The Git tag must match the manifest version (${tag}).`);
 }
-if (!readFileSync(join(root, "release-notes", `${tag}.md`), "utf8").trim()) {
+if (!(await Bun.file(join(root, "release-notes", `${tag}.md`)).text()).trim()) {
   throw new Error(`Release notes for ${tag} are empty.`);
 }
 
@@ -41,9 +39,10 @@ const archive = `just-pagination-${version}.zip`;
 const checksum = `${archive}.sha256`;
 try {
   const path = join(staging, archive);
-  execFileSync("zip", ["-q", "-X", path, ...runtimeFiles], { cwd: dist });
-  const digest = createHash("sha256").update(readFileSync(path)).digest("hex");
-  writeFileSync(join(staging, checksum), `${digest}  ${archive}\n`);
+  await $`zip -q -X ${path} ${runtimeFiles}`.cwd(dist);
+  const bytes = await Bun.file(path).arrayBuffer();
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)).toHex();
+  await Bun.write(join(staging, checksum), `${digest}  ${archive}\n`);
   renameSync(path, join(artifacts, archive));
   renameSync(join(staging, checksum), join(artifacts, checksum));
   console.log(`Created artifacts/${archive}`);

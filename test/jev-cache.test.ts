@@ -1,6 +1,4 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
-import type { TestContext } from "node:test";
+import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import type { Classification, Decisions } from "../src/protocol.js";
 
 const data: Classification = {
@@ -10,7 +8,11 @@ const data: Classification = {
 };
 const site = "https://example.test";
 const event = { addListener() {} };
-let moduleInstance = 0;
+
+afterEach(() => {
+  mock.restore();
+  Reflect.deleteProperty(globalThis, "chrome");
+});
 
 type MessageListener = Parameters<typeof chrome.runtime.onMessage.addListener>[0];
 
@@ -30,19 +32,20 @@ function storage(values: Record<string, unknown>) {
   };
 }
 
-async function mockWorker(t: TestContext, respond: (request: number) => Response, saved: Record<string, unknown> = {}) {
+async function mockWorker(respond: (request: number) => Response, saved: Record<string, unknown> = {}) {
   let receive: MessageListener | undefined;
   let requests = 0;
   let documents = 0;
   const session: Record<string, unknown> = {};
-  t.mock.method(globalThis, "fetch", async (url: Parameters<typeof fetch>[0], options?: RequestInit) => {
-    assert.equal(url, "https://api.typesafe.ai/v1/systemone");
+  const fetchMock = Object.assign(async (url: Parameters<typeof fetch>[0], options?: RequestInit) => {
+    expect(url).toBe("https://api.typesafe.ai/v1/systemone");
     const payload = options?.body;
-    assert.ok(typeof payload === "string");
+    if (typeof payload !== "string") throw new TypeError("Expected a JSON request body");
     const body = JSON.parse(payload);
-    assert.deepEqual(body.state, { has_current: data.hasCurrent, controls: data.candidates });
+    expect(body.state).toStrictEqual({ has_current: data.hasCurrent, controls: data.candidates });
     return respond(++requests);
-  });
+  }, { preconnect: fetch.preconnect });
+  spyOn(globalThis, "fetch").mockImplementation(fetchMock);
   const mockChrome = {
     storage: { local: storage({ jevKey: "test-key", ...saved }), session: storage(session) },
     permissions: { contains: async () => true, onAdded: event, onRemoved: event },
@@ -55,10 +58,9 @@ async function mockWorker(t: TestContext, respond: (request: number) => Response
     },
   };
   Object.defineProperty(globalThis, "chrome", { value: mockChrome, configurable: true });
-  t.after(() => { Reflect.deleteProperty(globalThis, "chrome"); });
-  await import(`../dist/background.js?test=${++moduleInstance}`);
+  await import(`../dist/background.js?test=${crypto.randomUUID()}`);
   const listener = receive;
-  assert.ok(listener);
+  if (!listener) throw new Error("Expected a browser message listener");
   return {
     session,
     requestCount: () => requests,
@@ -85,53 +87,53 @@ function answer(choice: string, probability = 0.98) {
   return Response.json({ answers: { next: { type: "choice", choice, confidence: 0.97, probabilities: { [choice]: probability } } } });
 }
 
-test("reuses decisions across pages and keeps origins and layouts independent", async t => {
-  const worker = await mockWorker(t, () => answer("c1"));
-  assert.deepEqual(await worker.classify(`${site}/list?page=1`), { next: 1 });
-  assert.deepEqual(await worker.classify(`${site}/list?page=2`), { next: 1 });
-  assert.equal(worker.requestCount(), 1);
+test("reuses decisions across pages and keeps origins and layouts independent", async () => {
+  const worker = await mockWorker(() => answer("c1"));
+  expect(await worker.classify(`${site}/list?page=1`)).toStrictEqual({ next: 1 });
+  expect(await worker.classify(`${site}/list?page=2`)).toStrictEqual({ next: 1 });
+  expect(worker.requestCount()).toBe(1);
 
-  assert.deepEqual(await Promise.all([
+  expect(await Promise.all([
     worker.classify(`${site}/list?page=3`, "changed controls"),
     worker.classify(`${site}/list?page=4`, "changed controls"),
-  ]), [{ next: 1 }, { next: 1 }]);
-  assert.equal(worker.requestCount(), 2);
+  ])).toStrictEqual([{ next: 1 }, { next: 1 }]);
+  expect(worker.requestCount()).toBe(2);
 
-  assert.deepEqual(await worker.classify("https://other.test/list?page=1"), { next: 1 });
-  assert.equal(worker.requestCount(), 3);
+  expect(await worker.classify("https://other.test/list?page=1")).toStrictEqual({ next: 1 });
+  expect(worker.requestCount()).toBe(3);
   const cacheEntries = Object.keys(worker.session).filter(key => key.startsWith("jev:"));
-  assert.equal(cacheEntries.length, 3);
-  assert.ok(cacheEntries.every(key => /^jev:[a-f0-9]{64}$/.test(key)));
+  expect(cacheEntries).toHaveLength(3);
+  for (const key of cacheEntries) expect(key).toMatch(/^jev:[a-f0-9]{64}$/);
 });
 
-test("reuses confident no-match decisions and retries incomplete results on later pages", async t => {
-  const worker = await mockWorker(t, call => {
+test("reuses confident no-match decisions and retries incomplete results on later pages", async () => {
+  const worker = await mockWorker(call => {
     if (call === 1) return new Response(null, { status: 503 });
     return answer("none", call === 2 ? 0.6 : 0.98);
   });
-  assert.deepEqual(await worker.classify(`${site}/list?page=1`), {});
-  assert.deepEqual(await worker.classify(`${site}/list?page=2`), {});
-  assert.deepEqual(await worker.classify(`${site}/list?page=3`), { next: null });
-  assert.deepEqual(await worker.classify(`${site}/list?page=4`), { next: null });
-  assert.equal(worker.requestCount(), 3);
+  expect(await worker.classify(`${site}/list?page=1`)).toStrictEqual({});
+  expect(await worker.classify(`${site}/list?page=2`)).toStrictEqual({});
+  expect(await worker.classify(`${site}/list?page=3`)).toStrictEqual({ next: null });
+  expect(await worker.classify(`${site}/list?page=4`)).toStrictEqual({ next: null });
+  expect(worker.requestCount()).toBe(3);
 });
 
 
-test("migrates disabled sites to exact hosts and preserves parallel changes", async t => {
-  const worker = await mockWorker(t, () => answer("c1"), { pausedSites: ["https://example.test/*", "http://example.test/*"] });
+test("migrates disabled sites to exact hosts and preserves parallel changes", async () => {
+  const worker = await mockWorker(() => answer("c1"), { pausedSites: ["https://example.test/*", "http://example.test/*"] });
   const list = () => worker.send("settings.html", { type: "disabled-sites" });
-  assert.deepEqual(await list(), ["example.test"]);
-  assert.deepEqual(await worker.classify(`${site}/list?page=2`), {});
-  assert.equal(worker.requestCount(), 0);
+  expect(await list()).toStrictEqual(["example.test"]);
+  expect(await worker.classify(`${site}/list?page=2`)).toStrictEqual({});
+  expect(worker.requestCount()).toBe(0);
   const set = (host: string, disabled: boolean) =>
     worker.send("settings.html", { type: "set-site-disabled", host, disabled });
-  assert.deepEqual(await Promise.all([set("other.test", true), set("example.test", false)]), [true, true]);
-  assert.deepEqual(await list(), ["other.test"]);
-  assert.deepEqual(await worker.classify(`${site}/list?page=2`), { next: 1 });
-  assert.deepEqual(await worker.send("popup.html", { type: "site-status", url: "http://other.test/list" }), {
+  expect(await Promise.all([set("other.test", true), set("example.test", false)])).toStrictEqual([true, true]);
+  expect(await list()).toStrictEqual(["other.test"]);
+  expect(await worker.classify(`${site}/list?page=2`)).toStrictEqual({ next: 1 });
+  expect(await worker.send("popup.html", { type: "site-status", url: "http://other.test/list" })).toStrictEqual({
     host: "other.test", status: "disabled",
   });
-  assert.deepEqual(await worker.send("popup.html", { type: "site-status", url: "http://sub.other.test/list" }), {
+  expect(await worker.send("popup.html", { type: "site-status", url: "http://sub.other.test/list" })).toStrictEqual({
     host: "sub.other.test", status: "ready",
   });
 });

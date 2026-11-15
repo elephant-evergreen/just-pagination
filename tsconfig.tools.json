@@ -4,7 +4,7 @@
     "rootDir": ".",
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "types": ["chrome", "node"]
+    "types": ["chrome", "bun"]
   },
   "include": ["*.ts", "src/**/*.ts", "test/**/*.ts"]
 }

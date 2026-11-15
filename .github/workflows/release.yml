@@ -19,8 +19,8 @@ jobs:
         with:
           version: '2026.10.17'
           cache: false
-      - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: pnpm package
+      - run: mise exec -- bun install --frozen-lockfile
+      - run: mise run package
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
