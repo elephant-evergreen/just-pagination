@@ -1,4 +1,4 @@
-# <img src="extension/assets/icon.png" width="32" height="32" alt=""> Just Pagination <img src="media/chrome-extension.svg" width="124" height="22" alt="Chrome extension">
+# <img src="extension/assets/icon.png" width="32" height="32" alt=""> Just Pagination <img src="media/chrome-extension.svg" width="138" height="22" alt="Chrome extension">
 
 Use ← and → to move between pages of search results, product listings, and other paginated lists in Chrome.
 
