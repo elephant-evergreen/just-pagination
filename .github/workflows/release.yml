@@ -6,6 +6,11 @@ on:
 
 permissions:
   contents: write
+  actions: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -14,15 +19,122 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Verify release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*" >&2; exit 1; }
+          version="${TAG#v}"
+
+          git fetch --force --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/tags/$TAG:refs/tags/$TAG"
+          [ "$(git cat-file -t "refs/tags/$TAG")" = tag ] || fail "Create an annotated tag, not a lightweight tag."
+          commit=$(git rev-parse "refs/tags/$TAG^{commit}")
+          [ "$commit" = "$(git rev-parse HEAD)" ] || fail "Check out the commit pointed to by $TAG."
+          git merge-base --is-ancestor "$commit" refs/remotes/origin/main || fail "$TAG must point to a commit on main."
+          [ "$(jq -r .version extension/manifest.json)" = "$version" ] || fail "The manifest version must match $TAG."
+          [ -s "release-notes/$TAG.md" ] || fail "Add release-notes/$TAG.md before tagging."
+
+          runs=$(gh api \
+            "repos/$REPO/actions/workflows/check.yml/runs?head_sha=$commit&branch=main&event=push&status=success&per_page=1" \
+            --jq '.workflow_runs | length')
+          [ "$runs" -gt 0 ] || fail "Check has not succeeded for $commit on main."
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
           version: '2026.10.17'
           cache: false
       - run: mise exec -- bun install --frozen-lockfile
       - run: mise run package
-      - name: Create draft release
+      - name: Verify built package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          zip="artifacts/just-pagination-$version.zip"
+          checksum="$zip.sha256"
+          test -f "$zip"
+          test -f "$checksum"
+          (cd artifacts && sha256sum -c "$(basename "$checksum")")
+          unzip -tq "$zip"
+          test "$(unzip -p "$zip" manifest.json | jq -r .version)" = "$version"
+      - name: Create or resume GitHub draft
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --verify-tag --draft --title "Just Pagination $TAG" --notes-file "release-notes/$TAG.md" artifacts/just-pagination-*.zip artifacts/just-pagination-*.zip.sha256
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*" >&2; exit 1; }
+          version="${TAG#v}"
+          zip="artifacts/just-pagination-$version.zip"
+          checksum="$zip.sha256"
+
+          if ! release=$(gh release view "$TAG" --json isDraft,name,body 2>/dev/null); then
+            gh release create "$TAG" --verify-tag --draft \
+              --title "Just Pagination $TAG" \
+              --notes-file "release-notes/$TAG.md"
+            release=$(gh release view "$TAG" --json isDraft,name,body)
+          fi
+
+          if [ "$(jq -r .isDraft <<<"$release")" != true ]; then
+            echo "Release $TAG is already published; leaving its assets unchanged."
+            exit 0
+          fi
+          [ "$(jq -r .name <<<"$release")" = "Just Pagination $TAG" ] ||
+            fail "Draft title does not match $TAG; inspect the draft instead of overwriting it."
+          [ "$(jq -r .body <<<"$release")" = "$(cat "release-notes/$TAG.md")" ] ||
+            fail "Draft notes do not match release-notes/$TAG.md; inspect the draft instead of overwriting it."
+
+          assets=$(gh release view "$TAG" --json assets)
+          upload=()
+          replace=()
+          for file in "$zip" "$checksum"; do
+            name="${file##*/}"
+            state=$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .state' <<<"$assets")
+            if [ -z "$state" ]; then
+              upload+=("$file")
+            elif [ "$state" != uploaded ]; then
+              replace+=("$file")
+            fi
+          done
+          if [ "${#upload[@]}" -gt 0 ] || [ "${#replace[@]}" -gt 0 ]; then
+            [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true ] ||
+              fail "Release $TAG became published; refusing to upload assets."
+            if [ "${#replace[@]}" -gt 0 ]; then
+              gh release upload "$TAG" --clobber "${replace[@]}"
+            fi
+            if [ "${#upload[@]}" -gt 0 ]; then
+              gh release upload "$TAG" "${upload[@]}"
+            fi
+          fi
+      - name: Verify release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*" >&2; exit 1; }
+          version="${TAG#v}"
+          zip="just-pagination-$version.zip"
+          checksum="$zip.sha256"
+
+          expected=$(printf '%s\n' "$checksum" "$zip" | sort)
+          actual=$(gh release view "$TAG" --json assets --jq '.assets[].name' | sort)
+          [ "$actual" = "$expected" ] || fail "Release $TAG must contain only $zip and $checksum."
+
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          gh release download "$TAG" --dir "$tmp" --pattern "$zip" --pattern "$checksum"
+          (cd "$tmp" && sha256sum -c "$checksum" && unzip -tq "$zip")
+          test "$(unzip -p "$tmp/$zip" manifest.json | jq -r .version)" = "$version"
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true ]; then
+            test "$(sha256sum "$tmp/$zip" | cut -d' ' -f1)" = "$(sha256sum "artifacts/$zip" | cut -d' ' -f1)" ||
+              fail "Draft asset $zip does not match the tagged build; use a new version."
+          fi
+          echo "Verified GitHub release assets for $TAG."

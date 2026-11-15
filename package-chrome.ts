@@ -1,21 +1,19 @@
 import { $ } from "bun";
-import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync } from "node:fs";
-import { join, relative } from "node:path";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, utimesSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+import { releaseTag, releaseVersion } from "./release.ts";
 
 const root = import.meta.dir;
 const dist = join(root, "dist");
-const manifest: { version?: unknown; manifest_version?: unknown } = await Bun.file(join(dist, "manifest.json")).json();
-const { version } = manifest;
-if (manifest.manifest_version !== 3 || typeof version !== "string" || !/^(0|[1-9]\d{0,4})(\.(0|[1-9]\d{0,4})){2}$/.test(version) ||
-    version === "0.0.0" || version.split(".").some(part => Number(part) > 65535)) {
-  throw new Error("Expected a Manifest V3 extension with a valid three-part version.");
-}
-const tag = `v${version}`;
+const manifest = await Bun.file(join(dist, "manifest.json")).json();
+const version = releaseVersion(manifest);
+const tag = releaseTag(version);
 if (Bun.env.GITHUB_REF_TYPE === "tag" && Bun.env.GITHUB_REF_NAME !== tag) {
   throw new Error(`The Git tag must match the manifest version (${tag}).`);
 }
-if (!(await Bun.file(join(root, "release-notes", `${tag}.md`)).text()).trim()) {
-  throw new Error(`Release notes for ${tag} are empty.`);
+const notesPath = join(root, "release-notes", `${tag}.md`);
+if (!(await Bun.file(notesPath).exists()) || !(await Bun.file(notesPath).text()).trim()) {
+  throw new Error(`Release notes for ${tag} are missing or empty.`);
 }
 
 const runtimeFiles = [
@@ -37,7 +35,17 @@ const archive = `just-pagination-${version}.zip`;
 const checksum = `${archive}.sha256`;
 try {
   const path = join(staging, archive);
-  await $`zip -q -X ${path} ${runtimeFiles}`.cwd(dist);
+  const packageDir = join(staging, "package");
+  const fixedTime = new Date("1980-01-01T00:00:00Z");
+  // Keep reruns of the same tag byte-identical so a failed draft upload can resume safely.
+  for (const file of runtimeFiles) {
+    const target = join(packageDir, file);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(join(dist, file), target);
+    chmodSync(target, 0o644);
+    utimesSync(target, fixedTime, fixedTime);
+  }
+  await $`TZ=UTC zip -q -X ${path} ${runtimeFiles}`.cwd(packageDir);
   const bytes = await Bun.file(path).arrayBuffer();
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)).toHex();
   await Bun.write(join(staging, checksum), `${digest}  ${archive}\n`);
