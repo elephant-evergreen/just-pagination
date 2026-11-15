@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -45,7 +45,7 @@ jobs:
             "repos/$REPO/actions/workflows/check.yml/runs?head_sha=$commit&branch=main&event=push&status=success&per_page=1" \
             --jq '.workflow_runs | length')
           [ "$runs" -gt 0 ] || fail "Check has not succeeded for $commit on main."
-      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785
+      - uses: jdx/mise-action@v5.2.8
         with:
           version: '2026.11.8'
           cache: false
