@@ -38,7 +38,6 @@ type Decisions = import("./protocol.js").Decisions;
   const trackingParameter = /^(?:utm_.+|gclid|fbclid|ved)$/i;
   let enabled = false;
   let refreshRevision = 0;
-  let targets: Targets = {};
   let timer: number | undefined;
   let documentURL = location.href;
   let classificationAttempt: { signature: string } | undefined;
@@ -61,7 +60,7 @@ type Decisions = import("./protocol.js").Decisions;
 
   function usable(node: Element): node is HTMLElement {
     if (!(node instanceof HTMLElement) || !node.isConnected || !node.getClientRects().length) return false;
-    if (node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled," +
+    if (node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled,[aria-busy=true]," +
         nonPagination + ",form[method=dialog]")) return false;
     if (getComputedStyle(node).visibility !== "visible") return false;
     if (node instanceof HTMLAnchorElement) {
@@ -545,7 +544,7 @@ type Decisions = import("./protocol.js").Decisions;
       if (main && !control.closest("main,[role=main]")) continue;
       const ajaxListing = ajaxLoadMoreListing(control);
       if ((!isLoadMoreLabel(control) && !declaresManualLoadMore(control, ajaxListing?.list)) || !usable(control) ||
-          control.closest("aside,details,form,header,footer,[aria-busy=true],.ajax-load-more-wrap.alm-loading") ||
+          control.closest("aside,details,form,header,footer,.ajax-load-more-wrap.alm-loading") ||
           control.matches("[aria-expanded],[aria-haspopup],.alm-load-more-btn:is(.loading,.done)")) continue;
       const page = control instanceof HTMLAnchorElement ? pageAddress(new URL(control.href)) : undefined;
       if (control instanceof HTMLAnchorElement && (!page || !adjacentAddress(control.href, "next"))) continue;
@@ -694,7 +693,6 @@ type Decisions = import("./protocol.js").Decisions;
     if (!enabled) return;
     if (documentURL !== location.href) {
       documentURL = location.href;
-      targets = {};
       assisted = {};
       classificationAttempt = undefined;
     }
@@ -703,11 +701,10 @@ type Decisions = import("./protocol.js").Decisions;
       const previousDecision = assisted[direction];
       if (previousDecision && (!found.candidates.some(candidate => candidate.target === previousDecision) ||
           fingerprints.get(previousDecision) !== fingerprint(previousDecision))) {
+        if (previousDecision.isConnected && previousDecision.closest("[aria-busy=true]")) continue;
         delete assisted[direction];
       }
     }
-    targets = { ...assisted, ...found.solid };
-    for (const target of Object.values(targets)) fingerprints.set(target, fingerprint(target));
     return found;
   }
 
@@ -716,9 +713,10 @@ type Decisions = import("./protocol.js").Decisions;
     const found = inspectTargets();
     if (!found) return;
     if (!found.candidates.length || found.candidates.length > 8) return;
-    const needed = directions.filter(direction => !targets[direction] && found.candidates.some(({ data }) =>
-      (data.cue === "unknown" || data.cue === direction) && data.relation !== (direction === "next" ? -1 : 1),
-    ));
+    const needed = directions.filter(direction => !found.solid[direction] && !assisted[direction] &&
+      found.candidates.some(({ data }) =>
+        (data.cue === "unknown" || data.cue === direction) && data.relation !== (direction === "next" ? -1 : 1),
+      ));
     if (!needed.length) return;
     const data = { needed, hasCurrent: Boolean(found.group?.current), candidates: found.candidates.map(candidate => candidate.data) };
     const layout = found.group && classificationLayout(found.group.root, found.group.currentPage, found.candidates.map(candidate => candidate.target));
@@ -737,7 +735,6 @@ type Decisions = import("./protocol.js").Decisions;
         if (!fresh.solid[direction] && candidate && usable(candidate.target)) {
           fingerprints.set(candidate.target, fingerprint(candidate.target));
           assisted[direction] = candidate.target;
-          targets[direction] = candidate.target;
         }
       }
     } catch {
@@ -747,9 +744,6 @@ type Decisions = import("./protocol.js").Decisions;
 
   function schedule() {
     if (!enabled) return;
-    if (documentURL !== location.href) {
-      targets = {};
-    }
     if (timer !== undefined) return;
     timer = window.setTimeout(() => {
       timer = undefined;
@@ -760,14 +754,14 @@ type Decisions = import("./protocol.js").Decisions;
   const observer = new MutationObserver(records => {
     if (records.some(record => {
       const element = record.target instanceof Element ? record.target : record.target.parentElement;
-      return element?.closest(paginationSelector + ",a[rel],[aria-current=page]") ||
+      return record.attributeName === "aria-busy" ||
+        element?.closest(paginationSelector + ",a[rel],[aria-current=page]") ||
         inspectedRoots.some(root => element && root.contains(element)) ||
         [...record.addedNodes, ...record.removedNodes].some(node => node instanceof Element &&
           (node.matches(paginationSelector) || node.querySelector(paginationSelector) ||
             node.matches('a[href],li,td') && numberOf(node) !== undefined ||
             node.querySelector('ul a[href],ol a[href],tr a[href]')));
     })) {
-      targets = {};
       schedule();
     }
   });
@@ -776,7 +770,6 @@ type Decisions = import("./protocol.js").Decisions;
     const revision = ++refreshRevision;
     enabled = false;
     observer.disconnect();
-    targets = {};
     if (jevChanged) {
       assisted = {};
       classificationAttempt = undefined;
@@ -796,18 +789,17 @@ type Decisions = import("./protocol.js").Decisions;
     if (!enabled) return;
     observer.observe(document.documentElement, {
       subtree: true, childList: true, characterData: true, attributes: true,
-      attributeFilter: ["href", "rel", "aria-current", "aria-disabled", "aria-label", "disabled", "class", "hidden"],
+      attributeFilter: ["href", "rel", "aria-current", "aria-disabled", "aria-label", "disabled", "class", "hidden", "aria-busy"],
     });
     void scan();
   }
 
-  function eligibleAtActuation(direction: Direction, inspected?: ReturnType<typeof inspect>) {
-    const target = targets[direction];
-    if (!enabled || documentURL !== location.href || !target ||
-        fingerprints.get(target) !== fingerprint(target) || !usable(target)) return;
-    const fresh = inspected ?? inspect();
-    if (fresh.solid[direction] === target) return target;
-    if (assisted[direction] !== target) return;
+  function eligibleAtActuation(direction: Direction, fresh: ReturnType<typeof inspect>) {
+    if (!enabled || documentURL !== location.href) return;
+    const solid = fresh.solid[direction];
+    if (solid) return solid;
+    const target = assisted[direction];
+    if (!target || fingerprints.get(target) !== fingerprint(target) || !usable(target)) return;
     const candidate = fresh.candidates.find(candidate => candidate.target === target);
     if (!candidate) return;
     if (candidate.data.cue !== "unknown") {
@@ -839,10 +831,10 @@ type Decisions = import("./protocol.js").Decisions;
     const direction = event.key === "ArrowLeft" ? "previous" : event.key === "ArrowRight" ? "next" : undefined;
     if (!direction || event.composedPath().some(siteUsesArrowKeys)) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
-    const inspected = timer !== undefined || documentURL !== location.href ? inspectTargets() : undefined;
+    const inspected = inspectTargets();
+    if (!inspected) return;
     const pageTarget = eligibleAtActuation(direction, inspected);
     const more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
-    if (more && (inspected ?? inspect()).solid.next) return;
     const target = pageTarget ?? more?.control;
     if (!target) return;
     for (const media of document.querySelectorAll<HTMLMediaElement>("video,audio")) {

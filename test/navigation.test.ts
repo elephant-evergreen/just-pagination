@@ -20,7 +20,8 @@ const listing = `<div id="items">
 const showMore = '<button id="more">Load more articles</button>';
 let documentSequence = 0;
 
-async function withPage(html: string, run: (page: Page) => void, enabled = true, path = "/list", head = "") {
+async function withPage(html: string, run: (page: Page) => void | Promise<void>, enabled = true, path = "/list", head = "",
+  decisions: Partial<Record<Direction, number>> = {}) {
   const window = new Window({ url: "https://example.test" + path });
   patchSelectorEngine(window);
   const document = window.document as unknown as Document;
@@ -53,7 +54,7 @@ async function withPage(html: string, run: (page: Page) => void, enabled = true,
       sendMessage: async (message: { type: "content-status" } | { type: "classify"; data: { needed: Direction[] } }) => {
         if (message.type === "content-status") return enabled;
         fallback.push(...message.data.needed);
-        return {};
+        return decisions;
       },
     } },
     Element: window.Element,
@@ -72,7 +73,7 @@ async function withPage(html: string, run: (page: Page) => void, enabled = true,
   try {
     await import(`../src/content.ts?load-more=${++documentSequence}`);
     await new Promise(resolve => setTimeout(resolve, 0));
-    run({
+    await run({
       clicks,
       fallback,
       root: document.body,
@@ -303,6 +304,97 @@ test("matching document metadata validates a single numbered neighbor", async ()
     expect(press("ArrowLeft")).toBe(false);
     expect(clicks).toEqual([]);
   }, true, "/list/97", head);
+});
+
+test("a busy results region keeps the previous pager out of arrow turns", async () => {
+  const pager = '<nav aria-label="Pagination"><a id="previous" rel="prev" href="?page=1&color=blue">Previous page</a>' +
+    '<span aria-current="page">2</span><a id="next" rel="next" href="?page=3&color=blue">Next page</a></nav>';
+  await withPage(`<main id="results">${listing}${pager}</main>`, ({ root, clicks, press }) => {
+    const results = root.querySelector("#results")!;
+    results.setAttribute("aria-busy", "true");
+    expect(press("ArrowLeft")).toBe(false);
+    expect(press()).toBe(false);
+    expect(clicks).toEqual([]);
+    results.removeAttribute("aria-busy");
+    expect(press("ArrowLeft")).toBe(true);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["previous", "next"]);
+  }, true, "/list?page=2&color=blue");
+});
+
+test("the updated URL and pager drive the next two turns with the filter intact", async () => {
+  const render = (page: number) => {
+    const query = (target: number) => `?page=${target}&color=blue`;
+    return `<div id="items">Blue page ${page}</div><nav aria-label="Pagination">` +
+      (page > 1 ? `<a id="previous-${page}" rel="prev" href="${query(page - 1)}">Previous page</a>` : "") +
+      `<span aria-current="page">${page}</span>` +
+      `<a id="next-${page}" rel="next" href="${query(page + 1)}">Next page</a></nav>`;
+  };
+  await withPage(`<main id="results">${render(1)}</main>`, ({ root, clicks, press }) => {
+    const results = root.querySelector("#results")!;
+    results.addEventListener("click", event => {
+      const link = event.target instanceof Element ? event.target.closest("a") : null;
+      if (!link) return;
+      const url = new URL(link.href);
+      window.history.replaceState({}, "", url);
+      results.innerHTML = render(Number(url.searchParams.get("page")));
+    });
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["next-1", "previous-2"]);
+    expect(root.querySelector("#items")!.textContent).toBe("Blue page 1");
+    expect(new URL(window.location.href).search).toBe("?page=1&color=blue");
+  }, true, "/list?page=1&color=blue");
+});
+
+test("a pager replaced at the same URL is read when the key is pressed", async () => {
+  const pager = (id: string, href: string) =>
+    `<nav aria-label="Pagination"><span aria-current="page">1</span><a id="${id}" href="${href}">Next page</a></nav>`;
+  const html = `<main id="results"><div id="items">First</div>${pager("stale", "?page=3&color=blue")}</main>`;
+  await withPage(html, ({ root, clicks, press }) => {
+    const results = root.querySelector("#results")!;
+    results.innerHTML = `<div id="items">Filtered</div>${pager("next", "?page=2&color=blue")}`;
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["next"]);
+    expect(new URL(window.location.href).search).toBe("?page=1&color=blue");
+  }, true, "/list?page=1&color=blue");
+});
+
+test("a busy region requests Jev again after it clears", async () => {
+  const html = '<main id="results" aria-busy="true"><nav aria-label="Pagination">' +
+    '<span aria-current="page">2</span><button id="mystery"><svg aria-hidden="true"></svg></button></nav></main>';
+  await withPage(html, async ({ root, clicks, fallback, press }) => {
+    expect(fallback).toEqual([]);
+    root.querySelector("#results")!.removeAttribute("aria-busy");
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(fallback).toEqual(["previous", "next"]);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["mystery"]);
+  }, true, "/list?page=2", "", { next: 1 });
+});
+
+test("a selected Jev control survives a temporary busy region until the URL changes", async () => {
+  const html = '<main id="results"><nav aria-label="Pagination">' +
+    '<span aria-current="page">2</span><button id="mystery"><svg aria-hidden="true"></svg></button></nav></main>';
+  await withPage(html, async ({ root, clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["mystery"]);
+
+    const results = root.querySelector("#results")!;
+    results.setAttribute("aria-busy", "true");
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(press()).toBe(false);
+    expect(clicks).toEqual(["mystery"]);
+
+    results.removeAttribute("aria-busy");
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["mystery", "mystery"]);
+
+    window.history.replaceState({}, "", "?page=2&color=blue");
+    expect(press()).toBe(false);
+    expect(clicks).toEqual(["mystery", "mystery"]);
+  }, true, "/list?page=2", "", { next: 1 });
 });
 
 test("disclosures, ambiguous lists, and disabled sites leave the key alone", async () => {
