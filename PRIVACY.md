@@ -14,7 +14,7 @@ Opening Just Pagination Settings, or choosing another gallery page, loads the sa
 
 ## Requests to TypeSafe
 
-The extension sends your API key directly to TypeSafe to verify the connection. When it needs help identifying pagination, it sends the key and structured hints about the controls, including their order, kind, position relative to the current page, and direction when known. Classification requests omit page URLs, page text, form entries, and screenshots.
+Jev is optional. When you choose **Connect**, the extension sends your API key directly to TypeSafe to verify the connection. While connected, if it needs help identifying pagination, it sends the key and structured hints about the controls, including their order, kind, position relative to the current page, and direction when known. Classification requests omit page URLs, page text, form entries, and screenshots.
 
 TypeSafe processes those requests under its own service terms. Its privacy policy and retention information explain how it handles them. [TypeSafe Privacy Policy](https://typesafe.ai/legal/privacy-policy) · [TypeSafe request retention](https://help.typesafe.ai/articles/5974925716)
 

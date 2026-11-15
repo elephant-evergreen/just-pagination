@@ -99,8 +99,8 @@ body { margin: 0; padding: 25px 27px 22px; background: #edf0ef; }
   transform: translateY(-50%) rotate(45deg);
 }
 .key-cue kbd + kbd .symbol { transform: rotate(180deg); }
-.state-connected .key-cue { opacity: 1; animation: key-cue-in 400ms cubic-bezier(.23, 1, .32, 1); }
-.state-connected .key-cue kbd.dismissed { opacity: 0; animation: key-cue-press 210ms ease-out; }
+.gallery.ready .key-cue { opacity: 1; animation: key-cue-in 400ms cubic-bezier(.23, 1, .32, 1); }
+.gallery.ready .key-cue kbd.dismissed { opacity: 0; animation: key-cue-press 210ms ease-out; }
 @keyframes key-cue-in {
   from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)); }
   to { opacity: 1; transform: translate(-50%, -50%); }
@@ -111,13 +111,13 @@ body { margin: 0; padding: 25px 27px 22px; background: #edf0ef; }
   100% { opacity: 0; transform: translateY(3px) scale(.93); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .state-connected .key-cue { animation-name: key-cue-fade-in; }
-  .state-connected .key-cue kbd.dismissed { animation-name: key-cue-fade-out; }
+  .gallery.ready .key-cue { animation-name: key-cue-fade-in; }
+  .gallery.ready .key-cue kbd.dismissed { animation-name: key-cue-fade-out; }
 }
 @keyframes key-cue-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes key-cue-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
-.state-connected .key-cue kbd.already-tried { animation: none; }
+.gallery.ready .key-cue kbd.already-tried { animation: none; }
 
 .sites { margin-top: 43px; }
 .sites h2 { margin: 0 0 8px; font-size: 15px; font-weight: 830; }

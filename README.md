@@ -8,13 +8,12 @@ https://github.com/user-attachments/assets/53f53480-9ae6-4d7f-9dd7-44fd5e3d71df
 
 ## Get started
 
-You need desktop Chrome 120 or later and a [TypeSafe Jev API key](https://console.typesafe.ai/keys). TypeSafe usage charges may apply.
+You need desktop Chrome 120 or later.
 
 1. Download and extract the ZIP from the [latest release](https://github.com/elephant-evergreen/just-pagination/releases/latest), or [build from source](#build-from-source).
 2. In Chrome, open `chrome://extensions` and turn on **Developer mode**.
 3. Click **Load unpacked** and select the folder containing `manifest.json`. For a source build, select `dist/`.
-4. In **Just Pagination Settings**, paste your Jev key and click **Connect**. To reopen this page, click **Settings** in the toolbar popup.
-5. Under **Try the arrow keys**, press ← or → to turn a page and see the tabby tap its keyboard. You can also click a page number.
+4. In **Just Pagination Settings**, press ← or → under **Try the arrow keys** to turn a page. To reopen the sample, click **Settings** in the toolbar popup.
 
 ## Use it on a website
 
@@ -22,7 +21,7 @@ Press ← or → on a list with previous or next pages. If the popup shows **No 
 
 Open **Just Pagination** from Chrome’s extensions menu to **Disable** or **Enable** it on the current site. Use **Settings** in the popup to manage the list of disabled sites.
 
-Standard pagination is detected locally. Ambiguous controls may send navigation hints to TypeSafe. See the [privacy policy](PRIVACY.md).
+Standard pagination is detected locally. To get help with ambiguous controls, enter an optional [TypeSafe Jev API key](https://console.typesafe.ai/keys) under **Settings** and click **Connect**. When connected, ambiguous controls may send navigation hints to TypeSafe. Usage charges may apply. See the [privacy policy](PRIVACY.md).
 
 ## Build from source
 

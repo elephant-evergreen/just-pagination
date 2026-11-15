@@ -8,7 +8,6 @@ const error = document.querySelector<HTMLElement>("#error")!;
 const labels: Record<SiteStatus, string> = {
   ready: "",
   disabled: "Disabled",
-  disconnected: "Jev disconnected",
   "no-access": "No access",
   unsupported: "Page unavailable",
 };
@@ -25,7 +24,7 @@ async function readSite() {
 function render() {
   const canChange = info.status === "ready" || info.status === "disabled";
   const label = info.status === "disabled" ? "Enable" : "Disable";
-  hostname.textContent = info.status === "disconnected" ? "" : info.host ?? "";
+  hostname.textContent = info.host ?? "";
   hostname.title = hostname.textContent;
   status.textContent = labels[info.status];
   document.body.classList.toggle("active", info.status === "ready");
