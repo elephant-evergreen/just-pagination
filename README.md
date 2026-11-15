@@ -4,7 +4,7 @@ Use ← and → to move between pages of search results, product listings, and o
 
 https://github.com/user-attachments/assets/53f53480-9ae6-4d7f-9dd7-44fd5e3d71df
 
-[Download the MP4](https://raw.githubusercontent.com/elephant-evergreen/just-pagination/main/media/just-pagination.mp4) · [Photo credits](media/photo-credits.md)
+[Photo credits](media/photo-credits.md)
 
 ## Get started
 
