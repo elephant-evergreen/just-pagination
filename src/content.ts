@@ -17,6 +17,13 @@ type Decisions = import("./protocol.js").Decisions;
     next: /^(?:›|→|❯|>|next(?:\s+page)?|older\s+(?:posts|entries|articles)|次(?:へ|のページ)|次ページ)$/iu,
   };
   const navWords = /paginat|paging|(?:^|[\W_])pager(?:$|[\W_])|ページネーション|ページ送り|ページ移動|page[ -]?(?:nav(?:igation)?|numbers)/i;
+  const ajaxLoadMoreButton = ".alm-btn-wrap > button.alm-load-more-btn";
+  const loadMoreLabels = [
+    /^(?:load|show|see|view) (?:\d+ )?more(?: (?:products?|items?|results?|articles?|posts?|stories|recipes|projects|jobs|events|videos|news))?$/iu,
+    /^(?:(?:商品|記事|検索結果|結果|投稿|アイテム|製品)を)?もっと(?:見る|表示(?:する)?|読み込む)$/u,
+    /^(?:mehr (?:(?:produkte|artikel|beiträge|ergebnisse) )?(?:laden|anzeigen)|meer (?:laden|tonen|weergeven|bekijken|(?:producten|artikelen|berichten) (?:laden|tonen))|laad meer)$/iu,
+    /^(?:(?:afficher|voir|charger) plus(?: (?:de |d['’])(?:produits|articles|résultats|actualités))?|(?:cargar|mostrar|ver) más(?: (?:productos|resultados|artículos|entradas|noticias))?|(?:carregar|mostrar|ver) mais(?: (?:produtos|resultados|artigos|notícias))?|(?:carica|mostra|vedi) (?:altro|altri (?:prodotti|articoli|risultati)))$/iu,
+  ];
   const directions = ["previous", "next"] as const;
   type Targets = Partial<Record<Direction, HTMLElement>>;
   type Group = { root: Element; controls: HTMLElement[]; current?: Element; currentPage?: number };
@@ -36,6 +43,8 @@ type Decisions = import("./protocol.js").Decisions;
   let assisted: Targets = {};
   let inspectedRoots: Element[] = [];
   const fingerprints = new WeakMap<HTMLElement, string>();
+  type LoadMore = { control: HTMLElement; list: Element; itemCount: number };
+  let pendingLoadMore: { list: Element; itemCount: number; address: string; retryAt: number } | undefined;
 
   function safeDestination(raw: string): string | undefined {
     try {
@@ -67,6 +76,17 @@ type Decisions = import("./protocol.js").Decisions;
     return [node.getAttribute("aria-label"), node.getAttribute("title"), node.textContent,
       ...[...node.children].filter(child => !child.matches("[aria-hidden=true],svg")).map(child => child.textContent)]
       .filter((value): value is string => Boolean(value)).map(value => value.trim().replace(/\s+/g, " "));
+  }
+
+  function isLoadMoreLabel(node: Element) {
+    return label(node).some(value => {
+      const text = loadMoreText(value);
+      return loadMoreLabels.some(pattern => pattern.test(text));
+    });
+  }
+
+  function loadMoreText(value: string) {
+    return value.normalize("NFKC").replace(/\p{Cf}/gu, "").replace(/\s*[+→›»]\s*$/, "").trim().replace(/\s+/g, " ");
   }
 
   function directionOf(node: Element): Direction | "unknown" {
@@ -379,16 +399,165 @@ type Decisions = import("./protocol.js").Decisions;
     return addressDirection(href) === direction;
   }
 
-  function documentPage(direction: Direction) {
-    const rel = direction === "next" ? "next" : "prev";
+  function adjacentNumberedPath(href: string): Direction | undefined {
+    const current = new URL(location.href);
+    const target = new URL(href);
+    if (current.origin !== target.origin || current.search !== target.search) return;
+    const from = Number(current.pathname.match(numberedPath)?.[1]);
+    const to = Number(target.pathname.match(numberedPath)?.[1]);
+    if (from < 1 || to < 1 || Math.abs(to - from) !== 1 ||
+        numberedPathBase(current, from) !== numberedPathBase(target, to)) return;
+    return to > from ? "next" : "previous";
+  }
+
+  function hasDirectionalRel(anchor: HTMLAnchorElement, direction: Direction) {
+    const rel = anchor.getAttribute("rel")?.toLowerCase().split(/\s+/);
+    return direction === "next" ? rel?.includes("next") : rel?.includes("prev") || rel?.includes("previous");
+  }
+
+  function listingSize(list: Element, end?: Element) {
+    if (list.childElementCount < 3 || list.closest("nav,aside,[role=navigation],details," + nonPagination)) return 0;
+    const destinationsByTag = new Map<string, Set<string>>();
+    for (const entry of list.children) {
+      if (entry === end) break;
+      if (entry.matches("nav,aside,header,footer,[hidden],[aria-hidden=true]")) continue;
+      const link = entry.matches("a[href]") ? entry : entry.querySelector("a[href]");
+      if (!(link instanceof HTMLAnchorElement) || !safeDestination(link.href) || adjacentAddress(link.href, "next") ||
+          adjacentAddress(link.href, "previous")) continue;
+      const destination = new URL(link.href);
+      const entries = destinationsByTag.get(entry.tagName) ?? new Set<string>();
+      entries.add(destination.pathname + destination.search);
+      destinationsByTag.set(entry.tagName, entries);
+    }
+    return Math.max(0, ...[...destinationsByTag.values()].map(entries => entries.size));
+  }
+
+  function ajaxLoadMoreListing(control: Element): Pick<LoadMore, "list" | "itemCount"> | undefined {
+    if (!control.matches(ajaxLoadMoreButton)) return;
+    const container = control.closest(".ajax-load-more-wrap");
+    if (!container) return;
+    const lists = [...container.querySelectorAll(".alm-listing.alm-ajax")].filter(list =>
+      list.closest(".ajax-load-more-wrap") === container,
+    );
+    if (lists.length === 1) {
+      const list = lists[0];
+      return { list, itemCount: list.querySelectorAll("a[href]").length };
+    }
+  }
+
+  function declaresManualLoadMore(control: Element, list: Element | undefined) {
+    if (list?.getAttribute("data-scroll") !== "false" || directionOf(control) === "previous") return false;
+    const configured = (name: string) => loadMoreText((list.getAttribute(name) ?? "").replace(/<[^>]+>/g, "")).toLowerCase();
+    const expected = configured("data-button-label");
+    return Boolean(expected && expected !== configured("data-prev-button-label") &&
+      label(control).some(value => loadMoreText(value).toLowerCase() === expected));
+  }
+
+  function wooCommerceListing(control: HTMLElement): Pick<LoadMore, "list" | "itemCount"> | undefined {
+    if (!control.matches("a.lmp_button")) return;
+    const wrapper = control.closest(".lmp_load_more_button");
+    let found: Pick<LoadMore, "list" | "itemCount"> | undefined;
+    for (let list = wrapper?.previousElementSibling; list; list = list.previousElementSibling) {
+      if (!list.matches("ul.products") || !list.getClientRects().length) continue;
+      const itemCount = listingSize(list);
+      if (itemCount < 3) continue;
+      if (found) return;
+      found = { list, itemCount };
+    }
+    return found;
+  }
+
+  function listingBefore(control: HTMLElement): Pick<LoadMore, "list" | "itemCount"> | undefined {
+    const { top } = control.getBoundingClientRect();
+    function endsNearControl(item: Element) {
+      const bounds = item.getBoundingClientRect();
+      return bounds.height > 0 && bounds.bottom <= top + 4 && top - bounds.bottom <= 320;
+    }
+
+    function check(list: Element, depth: number): Pick<LoadMore, "list" | "itemCount"> | undefined {
+      if (list.matches("nav,aside,[role=navigation],details,progress,[role=status],[aria-hidden=true],[hidden]")) return;
+      if (!endsNearControl(list)) return;
+      const itemCount = listingSize(list);
+      if (itemCount >= 3) return { list, itemCount };
+      if (!depth) return;
+      for (const child of [...list.children].slice(-4).reverse()) {
+        const found = check(child, depth - 1);
+        if (found) return found;
+      }
+    }
+
+    let region: Element | null = control;
+    for (let depth = 0; region && region !== document.body && depth < 5; depth++, region = region.parentElement) {
+      let previous = region.previousElementSibling;
+      for (let distance = 0; previous && distance < 4; distance++, previous = previous.previousElementSibling) {
+        const found = check(previous, 2);
+        if (found) return found;
+      }
+      const last = region.previousElementSibling;
+      const second = last?.previousElementSibling;
+      const third = second?.previousElementSibling;
+      const parent = region.parentElement;
+      if (last && second && third && parent && endsNearControl(last) &&
+          last.tagName === second.tagName && last.tagName === third.tagName &&
+          (last.matches("article,li,[role=listitem]") || [...last.classList].some(name =>
+            second.classList.contains(name) && third.classList.contains(name),
+          ))) {
+        const itemCount = listingSize(parent, region);
+        if (itemCount >= 3) return { list: parent, itemCount };
+      }
+      if (region.matches("main,[role=main],section")) break;
+    }
+  }
+
+  function loadMoreAtEnd(): LoadMore | undefined {
+    const main = document.querySelector("main,[role=main]");
+    let found: LoadMore | undefined;
+    for (const control of document.querySelectorAll(controlSelector)) {
+      if (main && !control.closest("main,[role=main]")) continue;
+      const ajaxListing = ajaxLoadMoreListing(control);
+      if ((!isLoadMoreLabel(control) && !declaresManualLoadMore(control, ajaxListing?.list)) || !usable(control) ||
+          control.closest("aside,details,form,header,footer,[aria-busy=true],.ajax-load-more-wrap.alm-loading") ||
+          control.matches("[aria-expanded],[aria-haspopup],.alm-load-more-btn:is(.loading,.done)")) continue;
+      if (control instanceof HTMLAnchorElement) {
+        const next = pageAddress(new URL(control.href));
+        const current = pageAddress(new URL(location.href));
+        if (!next || next.value !== (current?.value ?? 1) + 1 || !adjacentAddress(control.href, "next")) continue;
+      }
+      const { left, top, width, height } = control.getBoundingClientRect();
+      const underPointer = document.elementFromPoint(left + width / 2, top + height / 2);
+      if (!underPointer || !control.contains(underPointer)) continue;
+      const listing = ajaxListing ?? wooCommerceListing(control) ??
+        (control.closest("article") ? undefined : listingBefore(control));
+      if (!listing || listing.list.closest("[aria-busy=true]")) continue;
+      if (found) return;
+      found = { control, ...listing };
+    }
+    if (!found) return;
+    if (pendingLoadMore && (pendingLoadMore.list === found.list || pendingLoadMore.address === location.href ||
+        addressDirection(pendingLoadMore.address) !== undefined) &&
+        pendingLoadMore.itemCount >= found.itemCount && performance.now() < pendingLoadMore.retryAt) return;
+    return found;
+  }
+
+  function documentPage(direction: Direction, anchors: HTMLAnchorElement[], groups: Group[]) {
     const destinations = new Set<string>();
-    for (const link of document.head.querySelectorAll<HTMLLinkElement>('link[rel~="' + rel + '"][href]')) {
+    const rel = direction === "next" ? '[rel~="next" i]' : '[rel~="prev" i],[rel~="previous" i]';
+    for (const link of document.head.querySelectorAll<HTMLLinkElement>("link[href]")) {
+      if (!link.matches(rel)) continue;
       const href = safeDestination(link.href);
-      if (href && addressDirection(href, true) === direction) destinations.add(href);
+      if (href && (addressDirection(href, true) ?? adjacentNumberedPath(href)) === direction) destinations.add(href);
     }
     if (destinations.size !== 1) return;
     const href = destinations.values().next().value;
-    return href && [...document.querySelectorAll<HTMLAnchorElement>("a[href]")].find(anchor => anchor.href === href && usable(anchor));
+    const links = anchors.filter(anchor =>
+      anchor.href === href && usable(anchor) && !isLoadMoreLabel(anchor),
+    );
+    const opposite = direction === "next" ? "previous" : "next";
+    return links.find(anchor => directionOf(anchor) === direction) ??
+      links.find(anchor => groups.some(group => group.currentPage !== undefined && group.root.contains(anchor) &&
+        numberOf(anchor) === group.currentPage + (direction === "next" ? 1 : -1))) ??
+      links.find(anchor => directionOf(anchor) === "unknown") ??
+      links.find(anchor => !hasDirectionalRel(anchor, opposite));
   }
 
   function destinationKey(control: HTMLElement) {
@@ -401,21 +570,29 @@ type Decisions = import("./protocol.js").Decisions;
   function inspect() {
     const groups = paginationGroups();
     inspectedRoots = groups.map(group => group.root);
+    const anchors = [...document.querySelectorAll<HTMLAnchorElement>("a[href]")];
+    const numberedNeighbors: Record<Direction, HTMLAnchorElement[]> = { previous: [], next: [] };
+    for (const anchor of anchors) {
+      if (!anchor.hasAttribute("rel")) continue;
+      const rel = directions.filter(direction => hasDirectionalRel(anchor, direction));
+      if (rel.length !== 1 || adjacentNumberedPath(anchor.href) !== rel[0] ||
+          anchor.closest("article,aside,header,footer,form") || !usable(anchor) || isLoadMoreLabel(anchor)) continue;
+      numberedNeighbors[rel[0]].push(anchor);
+    }
 
     const solid: Targets = {};
     for (const direction of directions) {
-      const metadata = documentPage(direction);
+      const metadata = documentPage(direction, anchors, groups);
       if (metadata) {
         solid[direction] = metadata;
         continue;
       }
-      const rel = direction === "next" ? "next" : "prev";
       const candidates = new Map<string | HTMLElement, HTMLElement>();
       for (const group of groups) {
         const { controls, current, currentPage } = group;
         const adjacent = currentPage === undefined ? undefined : currentPage + (direction === "next" ? 1 : -1);
         const available = controls.filter(usable).filter(control =>
-          !current?.contains(control) && automatic(group, control) &&
+          !current?.contains(control) && !isLoadMoreLabel(control) && !control.matches(ajaxLoadMoreButton) && automatic(group, control) &&
           (!(control instanceof HTMLAnchorElement) || pageDirection(control, group) === direction),
         );
         const named = available.filter(control => directionOf(control) === direction);
@@ -435,11 +612,19 @@ type Decisions = import("./protocol.js").Decisions;
         }
       }
       if (!candidates.size) {
-        for (const node of document.querySelectorAll<HTMLAnchorElement>("a[href]")) {
-          if (directionOf(node) !== direction || !usable(node)) continue;
-          const explicit = node.relList.contains(rel);
+        for (const node of anchors) {
+          if (directionOf(node) !== direction || !usable(node) || isLoadMoreLabel(node)) continue;
+          const explicit = hasDirectionalRel(node, direction);
           const named = label(node).some(value => /\p{L}/u.test(value));
           if ((explicit || named) && adjacentAddress(node.href, direction)) candidates.set(destinationKey(node), node);
+        }
+      }
+      if (!candidates.size) {
+        const paired = numberedNeighbors[direction === "next" ? "previous" : "next"].length > 0;
+        for (const node of numberedNeighbors[direction]) {
+          if (paired || node.closest("nav,[role=navigation]")) {
+            candidates.set(destinationKey(node), node);
+          }
         }
       }
       if (candidates.size === 1) solid[direction] = candidates.values().next().value;
@@ -451,7 +636,8 @@ type Decisions = import("./protocol.js").Decisions;
       const { controls, current, currentPage } = group;
       const resolvedDestinations = new Set(Object.values(solid).map(destinationKey));
       for (const [position, target] of controls.entries()) {
-        if (!usable(target) || current?.contains(target) || resolvedDestinations.has(destinationKey(target)) ||
+        if (!usable(target) || isLoadMoreLabel(target) || target.matches(ajaxLoadMoreButton) ||
+            current?.contains(target) || resolvedDestinations.has(destinationKey(target)) ||
             !automatic(group, target)) continue;
         const targetPage = numberOf(target);
         const cue = (target instanceof HTMLAnchorElement ? pageDirection(target, group) : undefined) ?? directionOf(target);
@@ -552,6 +738,7 @@ type Decisions = import("./protocol.js").Decisions;
     enabled = false;
     observer.disconnect();
     targets = {};
+    pendingLoadMore = undefined;
     let permitted = false;
     try {
       permitted = await chrome.runtime.sendMessage({ type: "content-status" }) === true;
@@ -600,7 +787,10 @@ type Decisions = import("./protocol.js").Decisions;
     if (!direction || event.composedPath().some(node => node instanceof Element && node.closest(protectedControls))) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
     const inspected = timer !== undefined || documentURL !== location.href ? inspectTargets() : undefined;
-    const target = eligibleAtActuation(direction, inspected);
+    const pageTarget = eligibleAtActuation(direction, inspected);
+    const more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
+    if (more && (inspected ?? inspect()).solid.next) return;
+    const target = pageTarget ?? more?.control;
     if (!target) return;
     for (const media of document.querySelectorAll<HTMLMediaElement>("video,audio")) {
       if (media.paused || media.ended) continue;
@@ -608,6 +798,11 @@ type Decisions = import("./protocol.js").Decisions;
       return;
     }
     event.preventDefault();
+    if (more) {
+      pendingLoadMore = {
+        list: more.list, itemCount: more.itemCount, address: location.href, retryAt: performance.now() + 5000,
+      };
+    }
     target.click();
   });
   void refresh();
