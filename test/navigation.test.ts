@@ -7,7 +7,7 @@ type Page = {
   clicks: string[];
   fallback: Direction[];
   root: HTMLElement;
-  press(key?: string, repeat?: boolean): boolean;
+  press(key?: string, repeat?: boolean, target?: Element): boolean;
   cover(control: string): void;
   advanceClock(ms: number): void;
 };
@@ -76,10 +76,12 @@ async function withPage(html: string, run: (page: Page) => void, enabled = true,
       clicks,
       fallback,
       root: document.body,
-      press(key = "ArrowRight", repeat = false) {
-        const event = new window.KeyboardEvent("keydown", { key, repeat, bubbles: true, cancelable: true });
+      press(key = "ArrowRight", repeat = false, target) {
+        const receiver = target ?? document.body;
+        const event = new (receiver.ownerDocument.defaultView!).KeyboardEvent("keydown",
+          { key, repeat, bubbles: true, cancelable: true });
         Object.defineProperty(event, "isTrusted", { value: true });
-        window.dispatchEvent(event);
+        receiver.dispatchEvent(event);
         return event.defaultPrevented;
       },
       cover(control) {
@@ -164,6 +166,30 @@ test("forward-only controls do not need a decision for the previous page", async
     expect(clicks).toEqual(["next"]);
     expect(fallback).toEqual([]);
   }, true, "/list?page=1");
+});
+
+test("focused widgets and horizontal scroll regions keep their arrow keys", async () => {
+  const carousel = '<section role="region" aria-roledescription="carousel" aria-label="Photos">' +
+    '<button id="slide">Photo</button><nav aria-label="Pagination"><a href="?page=3" rel="next">Next</a></nav></section>';
+  const dialog = '<div role="dialog"><button id="modal">Choose</button></div>';
+  const rail = '<div id="rail" tabindex="0" style="overflow-x:auto"><button id="thumbnail">Thumbnail</button></div>';
+  const paginator = '<nav aria-label="Pagination"><a id="page-back" rel="prev" href="?page=1">Previous page</a>' +
+    '<span aria-current="page">2</span><a id="page-next" rel="next" href="?page=3">Next page</a></nav>';
+  await withPage(carousel + dialog + rail + paginator, ({ root, clicks, press }) => {
+    const scrollRegion = root.querySelector("#rail")!;
+    Object.defineProperties(scrollRegion, { clientWidth: { value: 200 }, scrollWidth: { value: 450 } });
+    expect(press("ArrowRight", false, root.querySelector("#slide")!)).toBe(false);
+    expect(press("ArrowLeft", false, root.querySelector("#modal")!)).toBe(false);
+    expect(press("ArrowRight", false, root.querySelector("#thumbnail")!)).toBe(false);
+    expect(clicks).toEqual([]);
+    expect(press("ArrowLeft", false, root)).toBe(true);
+    expect(press("ArrowRight", false, root)).toBe(true);
+    expect(clicks).toEqual(["page-back", "page-next"]);
+  }, true, "/list?page=2");
+  await withPage(carousel, ({ root, clicks, press }) => {
+    expect(press("ArrowRight", false, root)).toBe(false);
+    expect(clicks).toEqual([]);
+  }, true, "/list?page=2");
 });
 
 test("load more follows successive links when the address stays on the first page", async () => {

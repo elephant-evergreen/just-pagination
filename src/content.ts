@@ -8,10 +8,11 @@ type Decisions = import("./protocol.js").Decisions;
   installed.justPaginationInstalled = true;
 
   const controlSelector = "a[href], button, [role=button]";
+  const widgetRegions = 'dialog,[role=dialog],[role=alertdialog],[aria-roledescription="carousel" i]';
   const protectedControls = "input, textarea, select, [contenteditable]:not([contenteditable=false]), " +
     "[role=textbox], [role=slider], [role=spinbutton], [role=combobox], [role=listbox], [role=menu], " +
-    "[role=tablist], [role=grid], [role=tree], video, audio";
-  const nonPagination = "dialog,[role=dialog],[role=menu],[role=tablist],[role=grid],[role=tree]";
+    "[role=tablist], [role=grid], [role=tree], video, audio," + widgetRegions;
+  const nonPagination = widgetRegions + ",[role=menu],[role=tablist],[role=grid],[role=tree]";
   const labels: Record<Direction, RegExp> = {
     previous: /^(?:‹|←|❮|<|prev(?:ious)?(?:\s+page)?|newer\s+(?:posts|entries|articles)|前(?:へ|のページ)|前ページ)$/iu,
     next: /^(?:›|→|❯|>|next(?:\s+page)?|older\s+(?:posts|entries|articles)|次(?:へ|のページ)|次ページ)$/iu,
@@ -816,6 +817,15 @@ type Decisions = import("./protocol.js").Decisions;
     return target;
   }
 
+  function siteUsesArrowKeys(node: EventTarget) {
+    if (!(node instanceof Element)) return false;
+    if (node.closest(protectedControls)) return true;
+    if (!(node instanceof HTMLElement) || node === document.body || node === document.documentElement ||
+        node.clientWidth === 0 || node.scrollWidth <= node.clientWidth) return false;
+    const { overflowX } = getComputedStyle(node);
+    return overflowX === "auto" || overflowX === "scroll";
+  }
+
   chrome.runtime.onMessage.addListener((message: unknown) => {
     if (typeof message === "object" && message !== null && "type" in message && message.type === "refresh") {
       void refresh("jevChanged" in message && message.jevChanged === true);
@@ -827,7 +837,7 @@ type Decisions = import("./protocol.js").Decisions;
     if (!enabled || !event.isTrusted || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey ||
         event.altKey || event.metaKey || event.ctrlKey) return;
     const direction = event.key === "ArrowLeft" ? "previous" : event.key === "ArrowRight" ? "next" : undefined;
-    if (!direction || event.composedPath().some(node => node instanceof Element && node.closest(protectedControls))) return;
+    if (!direction || event.composedPath().some(siteUsesArrowKeys)) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
     const inspected = timer !== undefined || documentURL !== location.href ? inspectTargets() : undefined;
     const pageTarget = eligibleAtActuation(direction, inspected);
