@@ -19,7 +19,8 @@ if (!(await Bun.file(notesPath).exists()) || !(await Bun.file(notesPath).text())
 const runtimeFiles = [
   "background.js", "content.js", "controls.css", "gallery-data.js", "jev.js", "manifest.json", "photo-credits.html",
   "popup.css", "popup.html", "popup.js", "protocol.js", "settings.html", "setup.css", "setup.js", "sites.js",
-  "assets/Mulish-OFL.txt", "assets/icon.png", "assets/icon-16.png", "assets/icon-32.png", "assets/icon-48.png", "assets/keyboard-cat.png", "assets/mulish.woff2",
+  "assets/Mulish-OFL.txt", "assets/chrome-web-store.png", "assets/elephant-evergreen.png", "assets/github.png",
+  "assets/icon.png", "assets/icon-16.png", "assets/icon-32.png", "assets/icon-48.png", "assets/keyboard-cat.png", "assets/mulish.woff2",
 ].sort();
 const builtFiles = readdirSync(dist, { recursive: true, withFileTypes: true }).filter(entry => !entry.isDirectory());
 const builtPaths = new Set(builtFiles.map(entry => relative(dist, join(entry.parentPath, entry.name))));
