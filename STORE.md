@@ -2,17 +2,17 @@
 
 ## Summary
 
-Move between pages of a list with the left and right arrow keys.
+Move between list pages and carousel slides with the left and right arrow keys.
 
 ## Description
 
-Use **←** and **→** to move through search results, product listings, and other paginated lists where Chrome grants site access. Try the shortcut in the sample gallery. Use the toolbar or Settings to disable it on a site.
+Use **←** and **→** to move through search results, product listings, and supported carousels where Chrome grants site access. On a page with both list navigation and a carousel, move the pointer onto the carousel to select it. Try the shortcut in the Settings sample gallery. Use the toolbar or Settings to disable it on a site.
 
-The sample gallery and standard pagination work without an API key. Just Pagination detects standard pagination on your device. Connect an optional TypeSafe Jev API key in Settings to get help interpreting ambiguous controls. TypeSafe usage charges may apply. The shortcut works when it can identify a previous or next page in the same list. The sample gallery loads its photos from Pexels.
+The sample gallery, standard pagination, and carousel navigation work without an API key. Just Pagination detects standard page and slide controls on your device. Connect an optional TypeSafe Jev API key in Settings to get help interpreting ambiguous page controls. TypeSafe usage charges may apply. The sample gallery loads its photos from Pexels.
 
 ## Single purpose
 
-Move to the adjacent page of a paginated web list with the arrow keys.
+Use the left and right arrow keys to move to the adjacent page or slide in web content with previous and next controls.
 
 ## Permission justifications
 
@@ -20,7 +20,7 @@ Move to the adjacent page of a paginated web list with the arrow keys.
 | --- | --- |
 | Storage | Save the Jev key, site settings, and sample progress locally. Reuse Jev results within a browser session. |
 | Active tab | Identify the current website when you open the toolbar popup, including when Chrome has limited the extension’s access to that site. |
-| Website access | Read navigation controls on ordinary web pages to find the previous and next page. Chrome manages site access. The extension skips sites you disable. |
+| Website access | Read navigation controls on ordinary web pages to find the previous and next page or slide. Chrome manages site access. The extension skips sites you disable. |
 | TypeSafe API | Verify the supplied key and resolve ambiguous pagination using structured navigation hints. |
 
 See the [privacy policy](PRIVACY.md) for data handling.
@@ -29,4 +29,5 @@ See the [privacy policy](PRIVACY.md) for data handling.
 
 1. Open the extension settings with the Jev API key field blank. Press Left and Right in the sample gallery, then select a page number.
 2. Open a paginated list on a site where Chrome grants access and verify both arrow keys. Choose **Disable** in the toolbar and confirm the shortcut stops on that site. Choose **Enable** to restore it.
-3. To test the optional Jev connection, enter the dedicated test key provided in **Test instructions** and select **Connect**.
+3. Open the [W3C carousel demo](https://www.w3.org/WAI/ARIA/apg/patterns/carousel/examples/carousel-1-prev-next/?norotate=true#ex_label). With the carousel visible, press Right and then Left without focusing a control. The demo advances one slide and then returns.
+4. To test the optional Jev connection, enter the dedicated test key provided in **Test instructions** and select **Connect**.

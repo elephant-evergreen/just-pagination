@@ -1,10 +1,10 @@
 # Just Pagination Privacy Policy
 
-Just Pagination uses page information to find the previous and next pages of a list on websites where you grant access.
+Just Pagination uses page information to find controls for the previous and next page or slide on websites where you grant access.
 
 ## Data on your device
 
-The extension examines page URLs and navigation controls locally. It stores your TypeSafe API key, disabled site hostnames, and the gallery keys you’ve tried in Chrome’s local extension storage. Chrome manages the site permissions you grant. **Disconnect** removes the stored API key. You can revoke site access in Chrome or uninstall the extension to remove its local data.
+The extension examines page URLs and navigation controls locally. It uses pointer position and keyboard focus on the current page to select a carousel. It stores your TypeSafe API key, disabled site hostnames, and the gallery keys you’ve tried in Chrome’s local extension storage. Chrome manages the site permissions you grant. **Disconnect** removes the stored API key. You can revoke site access in Chrome or uninstall the extension to remove its local data.
 
 The extension keeps Jev decisions and request limits in browser-session storage. It can reuse a decision for up to one hour if another page has the same navigation controls.
 
