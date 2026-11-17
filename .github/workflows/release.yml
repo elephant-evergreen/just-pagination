@@ -47,7 +47,7 @@ jobs:
           [ "$runs" -gt 0 ] || fail "Check has not succeeded for $commit on main."
       - uses: jdx/mise-action@v5.2.8
         with:
-          version: '2026.11.8'
+          version: '2026.11.9'
           cache: false
       - run: mise exec -- bun install --frozen-lockfile
       - run: mise run package
