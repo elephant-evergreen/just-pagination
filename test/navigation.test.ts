@@ -20,7 +20,7 @@ const listing = `<div id="items">
 const showMore = '<button id="more">Load more articles</button>';
 let documentSequence = 0;
 
-async function withPage(html: string, run: (page: Page) => void | Promise<void>, enabled = true, path = "/list", head = "",
+async function withPage(html: string, run: (page: Page) => void | Promise<void>, enabled: boolean | Promise<boolean> = true, path = "/list", head = "",
   decisions: Partial<Record<Direction, number>> = {}) {
   const window = new Window({ url: "https://example.test" + path });
   patchSelectorEngine(window);
@@ -38,6 +38,11 @@ async function withPage(html: string, run: (page: Page) => void | Promise<void>,
   }
   for (const node of document.querySelectorAll<HTMLElement>('[id^="items"]')) {
     node.getBoundingClientRect = () => new window.DOMRect(10, 10, 400, 390);
+  }
+  for (const carousel of document.querySelectorAll('[aria-roledescription="carousel"]')) {
+    const center = 50 + 100 * row++;
+    carousel.getBoundingClientRect = () => new window.DOMRect(center - 50, 20, 100, 200);
+    hits.set(center, carousel);
   }
   document.elementFromPoint = x => hits.get(x) ?? null;
   const clicks: string[] = [];
@@ -100,6 +105,21 @@ async function withPage(html: string, run: (page: Page) => void | Promise<void>,
     }
   }
 }
+
+test("the latest arrow pressed while checking site access is handled when access is confirmed", async () => {
+  const status = Promise.withResolvers<boolean>();
+  const pagination = `<nav aria-label="Pagination"><a id="prev" rel="prev" href="/list/page/1?sort=views">Previous</a>
+    <span aria-current="page">2</span><a id="next" rel="next" href="/list/page/3?sort=views">Next</a></nav>`;
+  await withPage(pagination, async ({ root, clicks, press }) => {
+    root.ownerDocument.hasFocus = () => true;
+    expect(press("ArrowLeft")).toBe(false);
+    expect(press("ArrowRight")).toBe(false);
+    expect(clicks).toEqual([]);
+    status.resolve(true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(clicks).toEqual(["next"]);
+  }, status.promise, "/list/page/2?sort=views");
+});
 
 test("load more is one click per batch and can retry after a stalled request", async () => {
   await withPage(`<main>${listing}${showMore}</main>`, ({ root, clicks, press, advanceClock }) => {
@@ -204,6 +224,71 @@ const adjacentPages = `<nav aria-label="Pagination">
   <span aria-current="page">2</span>
   <a id="next-page" href="?page=3" rel="next">Next</a>
 </nav>`;
+
+function moveMouse(target: Element) {
+  const { left, top, width, height } = target.getBoundingClientRect();
+  const event = new (target.ownerDocument.defaultView!).PointerEvent("pointermove", {
+    bubbles: true, pointerType: "mouse", clientX: left + width / 2, clientY: top + height / 2, movementX: 1,
+  });
+  Object.defineProperty(event, "isTrusted", { value: true });
+  target.dispatchEvent(event);
+}
+
+test("arrows use one visible carousel without focus and require a selection when there are several", async () => {
+  await withPage(carouselMarkup, ({ root, clicks, press, cover }) => {
+    const next = root.querySelector<HTMLButtonElement>("#next-slide")!;
+    expect(press()).toBe(true);
+    expect(root.ownerDocument.activeElement).toBe(root);
+    cover("next-slide");
+    expect(press()).toBe(false);
+    expect(next.disabled).toBe(false);
+    expect(clicks).toEqual(["next-slide"]);
+  });
+
+  const another = carouselMarkup.replace('id="next-slide"', 'id="another-slide"');
+  await withPage(carouselMarkup + another, ({ root, clicks, press }) => {
+    expect(press()).toBe(false);
+    moveMouse(root.querySelector("#another-slide")!);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["another-slide"]);
+  });
+});
+
+test("paging wins until the mouse selects a carousel, and scrolling the page clears that selection", async () => {
+  await withPage(carouselMarkup + adjacentPages, ({ root, clicks, press, cover }) => {
+    const next = root.querySelector<HTMLButtonElement>("#next-slide")!;
+    const page = root.querySelector<HTMLElement>("#next-page")!;
+    const view = root.ownerDocument.defaultView!;
+
+    expect(press()).toBe(true);
+    moveMouse(next);
+    expect(press()).toBe(true);
+    next.parentElement!.dispatchEvent(new view.Event("scroll", { bubbles: true }));
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(false);
+
+    page.focus();
+    expect(press("ArrowRight", false, page)).toBe(true);
+    page.blur();
+    root.ownerDocument.dispatchEvent(new view.Event("scroll"));
+    expect(press()).toBe(true);
+    moveMouse(next.parentElement!);
+    cover("next-slide");
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["next-page", "next-slide", "next-slide", "next-page", "next-page", "next-page"]);
+  }, true, "/list?page=2");
+});
+
+test("load more keeps the arrow keys without mouse selection, including while a batch is pending", async () => {
+  await withPage(`<main>${carouselMarkup}${listing}${showMore}</main>`, ({ root, clicks, press }) => {
+    root.querySelector<HTMLButtonElement>("#previous-slide")!.disabled = false;
+    expect(press("ArrowLeft")).toBe(false);
+    expect(press("ArrowRight")).toBe(true);
+    expect(press("ArrowRight")).toBe(false);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual(["more"]);
+  });
+});
 
 test("arrows use the focused carousel controls and return to the pager outside", async () => {
   await withPage(carouselMarkup + adjacentPages, ({ root, clicks, fallback, press }) => {

@@ -43,6 +43,8 @@ type Decisions = import("./protocol.js").Decisions;
   const numberedPath = /\/(\d{1,6})\/?$/;
   const trackingParameter = /^(?:utm_.+|gclid|fbclid|ved)$/i;
   let enabled = false;
+  let startupStatus: Promise<void> | undefined;
+  let pendingStartupKey: KeyboardEvent | undefined;
   let refreshRevision = 0;
   let timer: number | undefined;
   let documentURL = location.href;
@@ -52,6 +54,7 @@ type Decisions = import("./protocol.js").Decisions;
   const fingerprints = new WeakMap<HTMLElement, string>();
   type LoadMore = { control: HTMLElement; list: Element; itemCount: number; page?: ReturnType<typeof pageAddress> };
   let pendingLoadMore: Omit<LoadMore, "control"> & { address: string; retryAt: number } | undefined;
+  let carouselPointer: { carousel: Element; x: number; y: number } | undefined;
 
   function safeDestination(raw: string): string | undefined {
     try {
@@ -752,7 +755,7 @@ type Decisions = import("./protocol.js").Decisions;
   }
 
   function schedule() {
-    if (!enabled) return;
+    if (!enabled || document.readyState === "loading") return;
     if (timer !== undefined) return;
     timer = window.setTimeout(() => {
       timer = undefined;
@@ -778,6 +781,7 @@ type Decisions = import("./protocol.js").Decisions;
   async function refresh(jevChanged = false) {
     const revision = ++refreshRevision;
     enabled = false;
+    carouselPointer = undefined;
     observer.disconnect();
     if (jevChanged) {
       assisted = {};
@@ -794,7 +798,12 @@ type Decisions = import("./protocol.js").Decisions;
     if (!enabled) {
       assisted = {};
       classificationAttempt = undefined;
+      return;
     }
+    if (document.readyState !== "loading") observePagination();
+  }
+
+  function observePagination() {
     if (!enabled) return;
     observer.observe(document.documentElement, {
       subtree: true, childList: true, characterData: true, attributes: true,
@@ -848,6 +857,30 @@ type Decisions = import("./protocol.js").Decisions;
     return target;
   }
 
+  function carouselHasVisibleControls(carousel: Element) {
+    return Boolean(carouselTarget(carousel, "next") || carouselTarget(carousel, "previous"));
+  }
+
+  function singleVisibleCarousel() {
+    let visible: Element | undefined;
+    for (const carousel of document.querySelectorAll(carouselRegion)) {
+      const { left, top, width, height } = carousel.getBoundingClientRect();
+      if (!width || !height || !carousel.contains(document.elementFromPoint(left + width / 2, top + height / 2))) continue;
+      if (!carouselHasVisibleControls(carousel)) continue;
+      if (visible) return;
+      visible = carousel;
+    }
+    return visible;
+  }
+
+  function pointedCarousel() {
+    const pointer = carouselPointer;
+    if (pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest(carouselRegion) === pointer.carousel &&
+        carouselHasVisibleControls(pointer.carousel)) {
+      return pointer.carousel;
+    }
+  }
+
   function turnSlide(carousel: Element, target: HTMLElement, direction: Direction) {
     const activeBefore = document.activeElement;
     const focused = carousel.contains(activeBefore) ? activeBefore : null;
@@ -868,26 +901,68 @@ type Decisions = import("./protocol.js").Decisions;
   });
   window.addEventListener("popstate", schedule);
   (window as Window & { navigation?: EventTarget }).navigation?.addEventListener("currententrychange", schedule);
-  window.addEventListener("keydown", event => {
-    if (!enabled || !event.isTrusted || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey ||
+  window.addEventListener("pointermove", event => {
+    if (!enabled || !event.isTrusted || event.pointerType !== "mouse" || (!event.movementX && !event.movementY)) return;
+    const carousel = event.buttons === 0 && event.target instanceof Element && event.target.closest(carouselRegion);
+    carouselPointer = carousel ? { carousel, x: event.clientX, y: event.clientY } : undefined;
+  }, { capture: true, passive: true });
+  window.addEventListener("scroll", event => {
+    if (carouselPointer && (!(event.target instanceof Element) || !carouselPointer.carousel.contains(event.target))) {
+      carouselPointer = undefined;
+    }
+  }, { capture: true, passive: true });
+  window.addEventListener("pointerout", event => {
+    if (event.relatedTarget === null) carouselPointer = undefined;
+  }, { capture: true, passive: true });
+  window.addEventListener("blur", () => {
+    carouselPointer = undefined;
+    pendingStartupKey = undefined;
+  });
+  async function handleKeydown(event: KeyboardEvent) {
+    if (!event.isTrusted || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey ||
         event.altKey || event.metaKey || event.ctrlKey) return;
     const direction = event.key === "ArrowLeft" ? "previous" : event.key === "ArrowRight" ? "next" : undefined;
     if (!direction) return;
     const path = event.composedPath();
+    if (!enabled && startupStatus) {
+      const focus = document.activeElement;
+      const address = location.href;
+      const pressedAt = performance.now();
+      pendingStartupKey = event;
+      await startupStatus;
+      if (pendingStartupKey !== event) return;
+      pendingStartupKey = undefined;
+      if (performance.now() - pressedAt > 500 || !document.hasFocus() ||
+          document.activeElement !== focus || location.href !== address) return;
+    }
+    if (!enabled || event.defaultPrevented) return;
     if (path.some(siteUsesArrowKeys)) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
-    const carousel = path.find((node): node is Element => node instanceof Element && node.matches(carouselRegion));
+    let carousel = path.find((node): node is Element => node instanceof Element && node.matches(carouselRegion));
     let more: LoadMore | undefined;
     let target: HTMLElement | undefined;
-    if (carousel) {
-      if (carouselOwnsShortcut(carousel, event.key)) return;
-      target = carouselTarget(carousel, direction);
-    } else {
+    if (!carousel) {
       const inspected = inspectTargets();
       if (!inspected) return;
       const pageTarget = eligibleAtActuation(direction, inspected);
-      more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
-      target = pageTarget ?? more?.control;
+      const otherPageTarget = eligibleAtActuation(direction === "next" ? "previous" : "next", inspected);
+      const focused = document.activeElement;
+      const pagerFocused = inspected.group?.root.contains(focused) ||
+        pageTarget?.contains(focused) || otherPageTarget?.contains(focused);
+      if (!pagerFocused) carousel = pointedCarousel();
+      if (!carousel) {
+        more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
+        target = pageTarget ?? more?.control;
+        const loadingMore = pendingLoadMore?.address === location.href && performance.now() < pendingLoadMore.retryAt;
+        if (!target && !otherPageTarget && !inspected.group && !loadingMore) {
+          const visible = singleVisibleCarousel();
+          if (visible && (direction === "next" || !loadMoreAtEnd())) carousel = visible;
+        }
+      }
+    }
+    if (carousel) {
+      if (carouselOwnsShortcut(carousel, event.key)) return;
+      target = carouselTarget(carousel, direction);
     }
     if (!target) return;
     for (const media of document.querySelectorAll<HTMLMediaElement>("video,audio")) {
@@ -903,6 +978,14 @@ type Decisions = import("./protocol.js").Decisions;
     }
     if (carousel) turnSlide(carousel, target, direction);
     else target.click();
-  });
-  void refresh();
+  }
+  window.addEventListener("keydown", handleKeydown);
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", () => {
+      window.removeEventListener("keydown", handleKeydown);
+      window.addEventListener("keydown", handleKeydown);
+      observePagination();
+    }, { once: true });
+  }
+  startupStatus = refresh().finally(() => { startupStatus = undefined; });
 })();

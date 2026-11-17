@@ -11,7 +11,7 @@
     "matches": ["https://*/*", "http://*/*"],
     "exclude_matches": ["https://api.typesafe.ai/*"],
     "js": ["content.js"],
-    "run_at": "document_idle"
+    "run_at": "document_start"
   }],
   "background": {"service_worker": "background.js", "type": "module"},
   "action": {"default_popup": "popup.html", "default_icon": {"16": "assets/icon-16.png", "32": "assets/icon-32.png"}},
