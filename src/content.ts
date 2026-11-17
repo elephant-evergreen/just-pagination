@@ -7,15 +7,21 @@ type Decisions = import("./protocol.js").Decisions;
   if (installed.justPaginationInstalled) return;
   installed.justPaginationInstalled = true;
 
-  const controlSelector = "a[href], button, [role=button]";
-  const widgetRegions = 'dialog,[role=dialog],[role=alertdialog],[aria-roledescription="carousel" i]';
+  const buttonSelector = "button,[role=button]";
+  const controlSelector = "a[href]," + buttonSelector;
+  const carouselRegion = '[aria-roledescription="carousel" i],[aria-roledescription="カルーセル"],[aria-roledescription="スライドショー"]';
+  const widgetRegions = "dialog,[role=dialog],[role=alertdialog]";
   const protectedControls = "input, textarea, select, [contenteditable]:not([contenteditable=false]), " +
     "[role=textbox], [role=slider], [role=spinbutton], [role=combobox], [role=listbox], [role=menu], " +
     "[role=tablist], [role=grid], [role=tree], video, audio," + widgetRegions;
-  const nonPagination = widgetRegions + ",[role=menu],[role=tablist],[role=grid],[role=tree]";
+  const nonPagination = widgetRegions + "," + carouselRegion + ",[role=menu],[role=tablist],[role=grid],[role=tree]";
   const labels: Record<Direction, RegExp> = {
     previous: /^(?:‹|←|❮|<|prev(?:ious)?(?:\s+page)?|newer\s+(?:posts|entries|articles)|前(?:へ|のページ)|前ページ)$/iu,
     next: /^(?:›|→|❯|>|next(?:\s+page)?|older\s+(?:posts|entries|articles)|次(?:へ|のページ)|次ページ)$/iu,
+  };
+  const slideLabels: Record<Direction, RegExp> = {
+    previous: /^(?:‹|←|❮|<|(?:(?:show|go to(?: the)?) )?prev(?:ious)?(?: (?:slide|image|photo))?|前へ|前の(?:スライド|画像|写真))$/iu,
+    next: /^(?:›|→|❯|>|(?:(?:show|go to(?: the)?) )?next(?: (?:slide|image|photo))?|次へ|次の(?:スライド|画像|写真))$/iu,
   };
   const navWords = /paginat|paging|(?:^|[\W_])pager(?:$|[\W_])|ページネーション|ページ送り|ページ移動|page[ -]?(?:nav(?:igation)?|numbers)/i;
   const ajaxLoadMoreButton = ".alm-btn-wrap > button.alm-load-more-btn";
@@ -58,18 +64,21 @@ type Decisions = import("./protocol.js").Decisions;
     }
   }
 
-  function usable(node: Element): node is HTMLElement {
+  function availableControl(node: Element): node is HTMLElement {
     if (!(node instanceof HTMLElement) || !node.isConnected || !node.getClientRects().length) return false;
-    if (node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled,[aria-busy=true]," +
-        nonPagination + ",form[method=dialog]")) return false;
-    if (getComputedStyle(node).visibility !== "visible") return false;
+    return !node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled,[aria-busy=true]") &&
+      getComputedStyle(node).visibility === "visible";
+  }
+
+  function usable(node: Element): node is HTMLElement {
+    if (node.closest(nonPagination + ",form[method=dialog]") || !availableControl(node)) return false;
     if (node instanceof HTMLAnchorElement) {
       if (node.hasAttribute("download") || (node.target && node.target !== "_self") || !safeDestination(node.href)) return false;
       if (!node.closest("form") || pageAddress(new URL(node.href))) return true;
       const direction = directionOf(node);
       return direction !== "unknown" && adjacentAddress(node.href, direction);
     }
-    return node.matches("button,[role=button]") && !node.closest("a,form") &&
+    return node.matches(buttonSelector) && !node.closest("a,form") &&
       (!(node instanceof HTMLButtonElement) || !node.form);
   }
 
@@ -818,6 +827,40 @@ type Decisions = import("./protocol.js").Decisions;
     return overflowX === "auto" || overflowX === "scroll";
   }
 
+  function carouselOwnsShortcut(carousel: Element, key: string) {
+    const shortcut = `[aria-keyshortcuts~="${key}" i]`;
+    return carousel.matches(shortcut) || [...carousel.querySelectorAll(shortcut)].some(node => node.closest(carouselRegion) === carousel);
+  }
+
+  function carouselTarget(carousel: Element, direction: Direction) {
+    let target: HTMLElement | undefined;
+    for (const button of carousel.querySelectorAll(buttonSelector)) {
+      if (button.closest(carouselRegion) !== carousel ||
+          button.closest('a,form,nav,[role=navigation],[aria-roledescription="slide" i],[aria-roledescription="スライド"],[aria-expanded],' +
+            protectedControls) || button instanceof HTMLButtonElement && button.form) continue;
+      const [name] = label(button);
+      if (!name || !slideLabels[direction].test(name) || !availableControl(button)) continue;
+      const { left, top, width, height } = button.getBoundingClientRect();
+      if (!button.contains(document.elementFromPoint(left + width / 2, top + height / 2))) continue;
+      if (target) return;
+      target = button;
+    }
+    return target;
+  }
+
+  function turnSlide(carousel: Element, target: HTMLElement, direction: Direction) {
+    const activeBefore = document.activeElement;
+    const focused = carousel.contains(activeBefore) ? activeBefore : null;
+    target.click();
+    if (!focused) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== focused) return;
+    if (active === focused && !focused.matches(":disabled") && focused.getClientRects().length &&
+        getComputedStyle(focused).visibility === "visible") return;
+    const available = carouselTarget(carousel, direction) ?? carouselTarget(carousel, direction === "next" ? "previous" : "next");
+    available?.focus({ preventScroll: true });
+  }
+
   chrome.runtime.onMessage.addListener((message: unknown) => {
     if (typeof message === "object" && message !== null && "type" in message && message.type === "refresh") {
       void refresh("jevChanged" in message && message.jevChanged === true);
@@ -829,13 +872,23 @@ type Decisions = import("./protocol.js").Decisions;
     if (!enabled || !event.isTrusted || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey ||
         event.altKey || event.metaKey || event.ctrlKey) return;
     const direction = event.key === "ArrowLeft" ? "previous" : event.key === "ArrowRight" ? "next" : undefined;
-    if (!direction || event.composedPath().some(siteUsesArrowKeys)) return;
+    if (!direction) return;
+    const path = event.composedPath();
+    if (path.some(siteUsesArrowKeys)) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
-    const inspected = inspectTargets();
-    if (!inspected) return;
-    const pageTarget = eligibleAtActuation(direction, inspected);
-    const more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
-    const target = pageTarget ?? more?.control;
+    const carousel = path.find((node): node is Element => node instanceof Element && node.matches(carouselRegion));
+    let more: LoadMore | undefined;
+    let target: HTMLElement | undefined;
+    if (carousel) {
+      if (carouselOwnsShortcut(carousel, event.key)) return;
+      target = carouselTarget(carousel, direction);
+    } else {
+      const inspected = inspectTargets();
+      if (!inspected) return;
+      const pageTarget = eligibleAtActuation(direction, inspected);
+      more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
+      target = pageTarget ?? more?.control;
+    }
     if (!target) return;
     for (const media of document.querySelectorAll<HTMLMediaElement>("video,audio")) {
       if (media.paused || media.ended) continue;
@@ -848,7 +901,8 @@ type Decisions = import("./protocol.js").Decisions;
         list: more.list, itemCount: more.itemCount, page: more.page, address: location.href, retryAt: performance.now() + 5000,
       };
     }
-    target.click();
+    if (carousel) turnSlide(carousel, target, direction);
+    else target.click();
   });
   void refresh();
 })();

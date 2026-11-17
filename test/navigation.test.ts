@@ -193,6 +193,69 @@ test("focused widgets and horizontal scroll regions keep their arrow keys", asyn
   }, true, "/list?page=2");
 });
 
+const carouselMarkup = `<section aria-roledescription="carousel" aria-label="Product photos">
+  <label>Caption <input id="caption"></label>
+  <button id="previous-slide" aria-label="Previous slide" disabled>‹</button>
+  <button id="next-slide" aria-label="次の画像">›</button>
+  <div aria-roledescription="slide"><button id="slide-action">Next</button></div>
+</section>`;
+const adjacentPages = `<nav aria-label="Pagination">
+  <a id="previous-page" href="?page=1" rel="prev">Previous</a>
+  <span aria-current="page">2</span>
+  <a id="next-page" href="?page=3" rel="next">Next</a>
+</nav>`;
+
+test("arrows use the focused carousel controls and return to the pager outside", async () => {
+  await withPage(carouselMarkup + adjacentPages, ({ root, clicks, fallback, press }) => {
+    const next = root.querySelector<HTMLButtonElement>("#next-slide")!;
+    const previous = root.querySelector<HTMLButtonElement>("#previous-slide")!;
+    expect(press("ArrowLeft", false, next)).toBe(false);
+    expect(press("ArrowRight", false, root.querySelector("#caption")!)).toBe(false);
+    next.focus();
+    next.addEventListener("click", () => {
+      previous.disabled = false;
+      next.disabled = true;
+    });
+    expect(press("ArrowRight", false, next)).toBe(true);
+    expect(root.ownerDocument.activeElement).toBe(previous);
+    expect(press("ArrowRight", false, previous)).toBe(false);
+    expect(press("ArrowLeft", false, previous)).toBe(true);
+    expect(press("ArrowRight", false, root)).toBe(true);
+    expect(clicks).toEqual(["next-slide", "previous-slide", "next-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("carousel actions yield to site shortcuts and require an available unique button", async () => {
+  const html = carouselMarkup.replace("</section>", '<button id="duplicate" hidden>Next slide</button></section>');
+  await withPage(html + adjacentPages, ({ root, clicks, cover, press }) => {
+    const next = root.querySelector("#next-slide")!;
+    const carousel = next.parentElement!;
+    const duplicate = root.querySelector<HTMLButtonElement>("#duplicate")!;
+    next.addEventListener("keydown", event => event.preventDefault(), { once: true });
+    press("ArrowRight", false, next);
+    expect(clicks).toEqual([]);
+
+    carousel.setAttribute("aria-keyshortcuts", "ArrowRight");
+    expect(press("ArrowRight", false, next)).toBe(false);
+    carousel.removeAttribute("aria-keyshortcuts");
+
+    duplicate.hidden = false;
+    expect(press("ArrowRight", false, next)).toBe(false);
+    duplicate.hidden = true;
+    cover("next-slide");
+    expect(press("ArrowRight", false, next)).toBe(false);
+    expect(clicks).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("a disabled site keeps its carousel controls", async () => {
+  await withPage(carouselMarkup, ({ root, clicks, press }) => {
+    expect(press("ArrowRight", false, root.querySelector("#next-slide")!)).toBe(false);
+    expect(clicks).toEqual([]);
+  }, false);
+});
+
 test("load more follows successive links when the address stays on the first page", async () => {
   const link = '<a id="more" href="/list/page/2/">Load more articles</a>';
   await withPage(`<main>${listing}${link}</main>`, ({ root, clicks, press, advanceClock }) => {

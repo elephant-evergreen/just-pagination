@@ -20,6 +20,8 @@ In **Just Pagination Settings**, press ← or → under **Try the arrow keys** t
 
 Press ← or → on a list with previous or next pages. If the popup shows **No access**, check [Chrome’s site access settings](https://support.google.com/chrome/answer/2664769?hl=en).
 
+In a supported carousel, press **Tab** to focus a control inside it. Then use ← or → to move between slides. This works locally with carousels that identify themselves and have labelled previous or next slide buttons.
+
 Open **Just Pagination** from Chrome’s extensions menu to **Disable** or **Enable** it on the current site. Use **Settings** in the popup to manage the list of disabled sites.
 
 Standard pagination is detected locally and works without an API key. To get help with ambiguous controls, enter an optional [TypeSafe Jev API key](https://console.typesafe.ai/keys) under **Settings** and click **Connect**. When connected, ambiguous controls may send navigation hints to TypeSafe. Usage charges may apply. See the [privacy policy](PRIVACY.md).
