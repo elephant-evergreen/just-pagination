@@ -14,7 +14,7 @@ You need desktop Chrome 120 or later.
 2. Click **Add to Chrome**.
 3. Click **Add extension** to confirm.
 
-In **Just Pagination Settings**, press ← or → under **Try the arrow keys** to turn a page. To reopen the sample, click **Settings** in the toolbar popup.
+In **Just Pagination Settings**, press ← or → under **Try the arrow keys** to turn a page. The sample works without a Jev API key. To reopen it, click **Settings** in the toolbar popup.
 
 ## Use it on a website
 
@@ -22,7 +22,7 @@ Press ← or → on a list with previous or next pages. If the popup shows **No 
 
 Open **Just Pagination** from Chrome’s extensions menu to **Disable** or **Enable** it on the current site. Use **Settings** in the popup to manage the list of disabled sites.
 
-Standard pagination is detected locally. To get help with ambiguous controls, enter an optional [TypeSafe Jev API key](https://console.typesafe.ai/keys) under **Settings** and click **Connect**. When connected, ambiguous controls may send navigation hints to TypeSafe. Usage charges may apply. See the [privacy policy](PRIVACY.md).
+Standard pagination is detected locally and works without an API key. To get help with ambiguous controls, enter an optional [TypeSafe Jev API key](https://console.typesafe.ai/keys) under **Settings** and click **Connect**. When connected, ambiguous controls may send navigation hints to TypeSafe. Usage charges may apply. See the [privacy policy](PRIVACY.md).
 
 ## Build from source
 

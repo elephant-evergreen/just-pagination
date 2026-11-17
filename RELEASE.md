@@ -54,7 +54,7 @@ unzip -p just-pagination-0.0.2.zip manifest.json
 
 Use `sha256sum -c` on Linux. The manifest version must match the tag.
 
-Extract the ZIP and load its folder through **Load unpacked** in desktop Chrome. Connect with a dedicated test key, test the sample gallery with both arrow keys and a page number, check that focused inputs are left alone, and use the popup to disable and enable the current site.
+Extract the ZIP and load its folder through **Load unpacked** in desktop Chrome. Follow the [reviewer instructions](STORE.md#reviewer-instructions) to test the sample gallery and a paginated site with the Jev API key field blank, then test the optional connection with a dedicated key. Check that the arrow keys leave focused inputs alone.
 
 To simulate an update, load the previous release from a fixed folder, save the key and site settings, replace that folder with the new build, and click **Reload** on `chrome://extensions`. Confirm the saved settings survive. After the store update is live, repeat the check on an installation of the previous store version.
 

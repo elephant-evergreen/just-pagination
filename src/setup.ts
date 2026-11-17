@@ -13,6 +13,7 @@ const pager = document.querySelector<HTMLElement>(".pager")!;
 const previous = document.querySelector<HTMLButtonElement>(".previous")!;
 const next = document.querySelector<HTMLButtonElement>(".next")!;
 const keyboardCat = document.querySelector<HTMLImageElement>(".keyboard-cat img")!;
+const version = document.querySelector<HTMLElement>(".footer-version")!;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let catTap: Animation | undefined;
 const disclosure = note.textContent!;
@@ -20,6 +21,8 @@ const startPage = 4;
 let page = startPage;
 let connected = false;
 let busy = true;
+
+version.textContent = "v" + chrome.runtime.getManifest().version;
 
 const hints = {
   ArrowLeft: document.querySelector<HTMLElement>('[data-key="ArrowLeft"]')!,
