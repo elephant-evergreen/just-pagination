@@ -359,6 +359,93 @@ test("carousel actions yield to site shortcuts and require an available unique b
   }, true, "/list?page=2");
 });
 
+test("focus selects one of two carousels before the list pager", async () => {
+  const galleries = ["first", "second"].map(key => `<section aria-roledescription="carousel" aria-label="Gallery">
+    <div id="${key}-track" tabindex="0">Slide</div>
+    <button id="${key}-next" aria-label="Next slide">›</button>
+  </section>`).join("");
+  await withPage(galleries + adjacentPages, ({ root, clicks, fallback, press }) => {
+    for (const key of ["first", "second"]) {
+      const track = root.querySelector<HTMLElement>(`#${key}-track`)!;
+      track.focus();
+      expect(press("ArrowRight", false, track)).toBe(true);
+      track.blur();
+    }
+    expect(press("ArrowRight", false, root)).toBe(true);
+    expect(clicks).toEqual(["first-next", "second-next", "next-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("a dots-only carousel keeps its tab navigation and leaves paging available outside", async () => {
+  const carousel = `<section aria-roledescription="carousel" aria-label="Gallery">
+    <div role="tablist">
+      <button id="first-dot" role="tab" aria-selected="true">1</button>
+      <button id="second-dot" role="tab" aria-selected="false">2</button>
+    </div>
+  </section>`;
+  await withPage(carousel + adjacentPages, ({ root, clicks, fallback, press }) => {
+    const first = root.querySelector<HTMLButtonElement>("#first-dot")!;
+    const second = root.querySelector<HTMLButtonElement>("#second-dot")!;
+    first.addEventListener("keydown", event => {
+      if (event.key !== "ArrowRight") return;
+      event.preventDefault();
+      first.setAttribute("aria-selected", "false");
+      second.setAttribute("aria-selected", "true");
+      second.focus();
+    });
+    first.focus();
+    expect(press("ArrowRight", false, first)).toBe(true);
+    expect(root.ownerDocument.activeElement).toBe(second);
+    expect(second.getAttribute("aria-selected")).toBe("true");
+    expect(clicks).toEqual([]);
+    second.blur();
+    expect(press("ArrowLeft", false, root)).toBe(true);
+    expect(clicks).toEqual(["previous-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("an item in a horizontal scroll rail keeps its arrow keys", async () => {
+  const rail = `<div id="rail" style="overflow-x:auto;scroll-snap-type:x mandatory">
+    <a id="rail-item" href="/items/a">Item A</a><a href="/items/b">Item B</a>
+  </div>`;
+  await withPage(rail + adjacentPages, ({ root, clicks, fallback, press }) => {
+    const scroller = root.querySelector<HTMLElement>("#rail")!;
+    const item = root.querySelector<HTMLAnchorElement>("#rail-item")!;
+    Object.defineProperties(scroller, { clientWidth: { value: 240 }, scrollWidth: { value: 480 } });
+    item.focus();
+    expect(press("ArrowRight", false, item)).toBe(false);
+    expect(clicks).toEqual([]);
+    item.blur();
+    expect(press("ArrowRight", false, root)).toBe(true);
+    expect(clicks).toEqual(["next-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("an unnamed transform gallery can claim a key before list paging", async () => {
+  const gallery = `<section><div id="track" tabindex="0" style="overflow:hidden">
+    <div id="slides" style="transform:translateX(0px)">Slides</div>
+  </div><button id="gallery-next" aria-label="Next slide">›</button></section>`;
+  await withPage(gallery + adjacentPages, ({ root, clicks, fallback, press }) => {
+    const track = root.querySelector<HTMLElement>("#track")!;
+    const slides = root.querySelector<HTMLElement>("#slides")!;
+    track.addEventListener("keydown", event => {
+      if (event.key !== "ArrowRight") return;
+      event.preventDefault();
+      slides.style.transform = "translateX(-100px)";
+    }, { once: true });
+    track.focus();
+    expect(press("ArrowRight", false, track)).toBe(true);
+    expect(slides.style.transform).toBe("translateX(-100px)");
+    expect(clicks).toEqual([]);
+    expect(press("ArrowRight", false, track)).toBe(true);
+    expect(clicks).toEqual(["next-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
 test("a disabled site keeps its carousel controls", async () => {
   await withPage(carouselMarkup, ({ root, clicks, press }) => {
     expect(press("ArrowRight", false, root.querySelector("#next-slide")!)).toBe(false);
