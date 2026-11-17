@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Just Pagination",
   "version": "0.0.3",
-  "description": "Move between pages of a list with the left and right arrow keys.",
+  "description": "Move between list pages and carousel slides with the left and right arrow keys.",
   "minimum_chrome_version": "120",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://api.typesafe.ai/*"],
