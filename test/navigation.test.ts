@@ -39,7 +39,7 @@ async function withPage(html: string, run: (page: Page) => void | Promise<void>,
   for (const node of document.querySelectorAll<HTMLElement>('[id^="items"]')) {
     node.getBoundingClientRect = () => new window.DOMRect(10, 10, 400, 390);
   }
-  for (const carousel of document.querySelectorAll('[aria-roledescription="carousel"]')) {
+  for (const carousel of document.querySelectorAll('[aria-roledescription="carousel"],section[aria-label$=" carousel"]')) {
     const center = 50 + 100 * row++;
     carousel.getBoundingClientRect = () => new window.DOMRect(center - 50, 20, 100, 200);
     hits.set(center, carousel);
@@ -252,6 +252,31 @@ test("arrows use one visible carousel without focus and require a selection when
     expect(press()).toBe(true);
     expect(clicks).toEqual(["another-slide"]);
   });
+});
+
+test("a named carousel's arrow buttons can sit outside its nested carousel track", async () => {
+  const banner = `<section aria-label="Featured product carousel">
+    <button id="banner-prev"><span aria-hidden="true"></span><span>Previous slide</span></button>
+    <div id="track" aria-roledescription="carousel" tabindex="0">Product photos</div>
+    <button id="banner-next"><span aria-hidden="true"></span><span>Next slide</span></button>
+  </section>`;
+  await withPage(banner, ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["banner-next", "banner-prev"]);
+  });
+
+  await withPage(banner + adjacentPages, ({ root, clicks, press }) => {
+    const track = root.querySelector<HTMLElement>("#track")!;
+    expect(press()).toBe(true);
+    moveMouse(track);
+    expect(press()).toBe(true);
+    track.focus();
+    expect(press("ArrowLeft", false, track)).toBe(true);
+    track.setAttribute("aria-keyshortcuts", "ArrowRight");
+    expect(press("ArrowRight", false, track)).toBe(false);
+    expect(clicks).toEqual(["next-page", "banner-next", "banner-prev"]);
+  }, true, "/list?page=2");
 });
 
 test("paging wins until the mouse selects a carousel, and scrolling the page clears that selection", async () => {

@@ -9,7 +9,10 @@ type Decisions = import("./protocol.js").Decisions;
 
   const buttonSelector = "button,[role=button]";
   const controlSelector = "a[href]," + buttonSelector;
-  const carouselRegion = '[aria-roledescription="carousel" i],[aria-roledescription="カルーセル"],[aria-roledescription="スライドショー"]';
+  const namedCarousel = ':is(section,[role=region],[role=group])' +
+    ':is([aria-label="carousel" i],[aria-label^="carousel " i],[aria-label$=" carousel" i])';
+  const carouselRegion = '[aria-roledescription="carousel" i],[aria-roledescription="カルーセル"],[aria-roledescription="スライドショー"],' +
+    namedCarousel;
   const widgetRegions = "dialog,[role=dialog],[role=alertdialog]";
   const protectedControls = "input, textarea, select, [contenteditable]:not([contenteditable=false]), " +
     "[role=textbox], [role=slider], [role=spinbutton], [role=combobox], [role=listbox], [role=menu], " +
@@ -841,14 +844,28 @@ type Decisions = import("./protocol.js").Decisions;
     return carousel.matches(shortcut) || [...carousel.querySelectorAll(shortcut)].some(node => node.closest(carouselRegion) === carousel);
   }
 
-  function carouselTarget(carousel: Element, direction: Direction) {
-    let target: HTMLElement | undefined;
+  function* carouselControls(carousel: Element) {
     for (const button of carousel.querySelectorAll(buttonSelector)) {
       if (button.closest(carouselRegion) !== carousel ||
           button.closest('a,form,nav,[role=navigation],[aria-roledescription="slide" i],[aria-roledescription="スライド"],[aria-expanded],' +
             protectedControls) || button instanceof HTMLButtonElement && button.form) continue;
       const [name] = label(button);
-      if (!name || !slideLabels[direction].test(name) || !availableControl(button)) continue;
+      const direction = name && directions.find(value => slideLabels[value].test(name));
+      if (direction) yield { button, direction };
+    }
+  }
+
+  function carouselForKey(carousel: Element, key: string) {
+    for (let region: Element | null | undefined = carousel; region; region = region.parentElement?.closest(carouselRegion)) {
+      if (!carouselControls(region).next().done || carouselOwnsShortcut(region, key)) return region;
+    }
+    return carousel;
+  }
+
+  function carouselTarget(carousel: Element, direction: Direction) {
+    let target: HTMLElement | undefined;
+    for (const { button, direction: buttonDirection } of carouselControls(carousel)) {
+      if (direction !== buttonDirection || !availableControl(button)) continue;
       const { left, top, width, height } = button.getBoundingClientRect();
       if (!button.contains(document.elementFromPoint(left + width / 2, top + height / 2))) continue;
       if (target) return;
@@ -873,11 +890,11 @@ type Decisions = import("./protocol.js").Decisions;
     return visible;
   }
 
-  function pointedCarousel() {
+  function pointedCarousel(key: string) {
     const pointer = carouselPointer;
-    if (pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest(carouselRegion) === pointer.carousel &&
-        carouselHasVisibleControls(pointer.carousel)) {
-      return pointer.carousel;
+    if (pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest(carouselRegion) === pointer.carousel) {
+      const carousel = carouselForKey(pointer.carousel, key);
+      if (carouselHasVisibleControls(carousel)) return carousel;
     }
   }
 
@@ -938,7 +955,8 @@ type Decisions = import("./protocol.js").Decisions;
     if (!enabled || event.defaultPrevented) return;
     if (path.some(siteUsesArrowKeys)) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
-    let carousel = path.find((node): node is Element => node instanceof Element && node.matches(carouselRegion));
+    const focusedCarousel = path.find((node): node is Element => node instanceof Element && node.matches(carouselRegion));
+    let carousel = focusedCarousel && carouselForKey(focusedCarousel, event.key);
     let more: LoadMore | undefined;
     let target: HTMLElement | undefined;
     if (!carousel) {
@@ -949,7 +967,7 @@ type Decisions = import("./protocol.js").Decisions;
       const focused = document.activeElement;
       const pagerFocused = inspected.group?.root.contains(focused) ||
         pageTarget?.contains(focused) || otherPageTarget?.contains(focused);
-      if (!pagerFocused) carousel = pointedCarousel();
+      if (!pagerFocused) carousel = pointedCarousel(event.key);
       if (!carousel) {
         more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
         target = pageTarget ?? more?.control;
