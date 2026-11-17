@@ -10,10 +10,11 @@ https://github.com/user-attachments/assets/53f53480-9ae6-4d7f-9dd7-44fd5e3d71df
 
 You need desktop Chrome 120 or later.
 
-1. Download and extract the ZIP from the [latest release](https://github.com/elephant-evergreen/just-pagination/releases/latest), or [build from source](#build-from-source).
-2. In Chrome, open `chrome://extensions` and turn on **Developer mode**.
-3. Click **Load unpacked** and select the folder containing `manifest.json`. For a source build, select `dist/`.
-4. In **Just Pagination Settings**, press ← or → under **Try the arrow keys** to turn a page. To reopen the sample, click **Settings** in the toolbar popup.
+1. Open [Just Pagination in the Chrome Web Store](https://chromewebstore.google.com/detail/just-pagination/ijhnpclghelmocegpignnkfgieifcaeb).
+2. Click **Add to Chrome**.
+3. Click **Add extension** to confirm.
+
+In **Just Pagination Settings**, press ← or → under **Try the arrow keys** to turn a page. To reopen the sample, click **Settings** in the toolbar popup.
 
 ## Use it on a website
 
@@ -36,3 +37,9 @@ mise run check
 This builds `dist/` and runs the tests. Run `mise exec -- bun fmt` to format code. See the [release guide](RELEASE.md) to package a version for distribution.
 
 When you add, remove, or update a workflow dependency, regenerate and commit `.github/workflows/actions.lock` with `gh actions-lock`. [GitHub's lockfile guide](https://docs.github.com/en/actions/how-tos/secure-your-work/lock-workflow-dependencies)
+
+## Install manually
+
+1. Download and extract the ZIP from the [latest release](https://github.com/elephant-evergreen/just-pagination/releases/latest), or [build from source](#build-from-source).
+2. In Chrome, open `chrome://extensions` and turn on **Developer mode**.
+3. Click **Load unpacked** and select the folder containing `manifest.json`. For a source build, select `dist/`.
