@@ -2,7 +2,7 @@
 
 Use ← and → to move between pages of search results, product listings, and other paginated lists in Chrome.
 
-https://github.com/user-attachments/assets/53f53480-9ae6-4d7f-9dd7-44fd5e3d71df
+![Pressing the right arrow key turns pages on two example sites and in Just Pagination Settings](media/just-pagination.gif)
 
 [Photo credits](media/photo-credits.md)
 
