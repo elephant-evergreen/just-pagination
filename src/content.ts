@@ -45,6 +45,8 @@ type Decisions = import("./protocol.js").Decisions;
   const pagePath = /\/(?:page[\/=-]|p)\d+(?:\.html)?\/?$/i;
   const numberedPath = /\/(\d{1,6})\/?$/;
   const trackingParameter = /^(?:utm_.+|gclid|fbclid|ved)$/i;
+  const gmailHost = "mail.google.com";
+  const gmailRange = /^\d{1,7}\s*[–—-]\s*\d{1,7}\s*(?:\/|\p{L}{1,4})\s*[\d\s,.]+(?:\s*\p{L}{1,4})?$/iu;
   let enabled = false;
   let startupStatus: Promise<void> | undefined;
   let pendingStartupKey: KeyboardEvent | undefined;
@@ -588,6 +590,35 @@ type Decisions = import("./protocol.js").Decisions;
     return found;
   }
 
+  function gmailPager(): Targets {
+    if (location.hostname !== gmailHost) return {};
+    const pagers: Targets[] = [];
+    for (const counter of document.querySelectorAll<HTMLElement>("[role=button]")) {
+      const text = (counter.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (!gmailRange.test(text) || counter.querySelector("[role=button]")) continue;
+      const siblings = [...(counter.parentElement?.children ?? [])].filter((sibling): sibling is HTMLElement =>
+        sibling !== counter && sibling instanceof HTMLElement && sibling.matches("[role=button]"));
+      if (siblings.length !== 2) continue;
+      pagers.push({
+        previous: availableControl(siblings[0]) ? siblings[0] : undefined,
+        next: availableControl(siblings[1]) ? siblings[1] : undefined,
+      });
+    }
+    for (let index = pagers.length - 1; index >= 0; index--) {
+      if (pagers[index].previous || pagers[index].next) return pagers[index];
+    }
+    return {};
+  }
+
+  function gmailClick(target: HTMLElement) {
+    const { left, top, width, height } = target.getBoundingClientRect();
+    const init = { bubbles: true, cancelable: true, button: 0,
+      clientX: left + width / 2, clientY: top + height / 2 };
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      target.dispatchEvent(new window.PointerEvent(type, init));
+    }
+  }
+
   function documentPage(direction: Direction, anchors: HTMLAnchorElement[], groups: Group[]) {
     const destinations = new Set<string>();
     const rel = direction === "next" ? '[rel~="next" i]' : '[rel~="prev" i],[rel~="previous" i]';
@@ -677,6 +708,11 @@ type Decisions = import("./protocol.js").Decisions;
         }
       }
       if (candidates.size === 1) solid[direction] = candidates.values().next().value;
+    }
+
+    const gmail = gmailPager();
+    for (const direction of directions) {
+      if (!solid[direction] && gmail[direction]) solid[direction] = gmail[direction];
     }
 
     const candidates: { target: HTMLElement; data: CandidateShape }[] = [];
@@ -995,13 +1031,15 @@ type Decisions = import("./protocol.js").Decisions;
       };
     }
     if (carousel) turnSlide(carousel, target, direction);
+    else if (location.hostname === gmailHost) gmailClick(target);
     else target.click();
   }
-  window.addEventListener("keydown", handleKeydown);
+  const keyOptions = location.hostname === gmailHost ? { capture: true } : undefined;
+  window.addEventListener("keydown", handleKeydown, keyOptions);
   if (document.readyState === "loading") {
     window.addEventListener("DOMContentLoaded", () => {
-      window.removeEventListener("keydown", handleKeydown);
-      window.addEventListener("keydown", handleKeydown);
+      window.removeEventListener("keydown", handleKeydown, keyOptions);
+      window.addEventListener("keydown", handleKeydown, keyOptions);
       observePagination();
     }, { once: true });
   }

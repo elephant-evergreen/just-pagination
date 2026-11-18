@@ -190,7 +190,7 @@ test("route evidence stays on one page list and ignores unrelated links", async 
 });
 
 test("keyboard turns require trusted input and fresh eligibility", () => {
-  expect(source).toContain('window.addEventListener("keydown", handleKeydown)');
+  expect(source).toContain('window.addEventListener("keydown", handleKeydown, keyOptions)');
   const keydown = source.slice(source.indexOf("function handleKeydown("));
   const trusted = keydown.indexOf("!event.isTrusted");
   const revalidate = keydown.indexOf("eligibleAtActuation(direction");

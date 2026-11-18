@@ -21,8 +21,8 @@ const showMore = '<button id="more">Load more articles</button>';
 let documentSequence = 0;
 
 async function withPage(html: string, run: (page: Page) => void | Promise<void>, enabled: boolean | Promise<boolean> = true, path = "/list", head = "",
-  decisions: Partial<Record<Direction, number>> = {}) {
-  const window = new Window({ url: "https://example.test" + path });
+  decisions: Partial<Record<Direction, number>> = {}, host = "example.test") {
+  const window = new Window({ url: `https://${host}${path}` });
   patchSelectorEngine(window);
   const document = window.document as unknown as Document;
   document.head.innerHTML = head;
@@ -534,6 +534,70 @@ test("a WooCommerce load-more link can follow a distant product list", async () 
   await withPage(html, ({ clicks, press }) => {
     expect(press()).toBe(true);
     expect(clicks).toEqual(["more"]);
+  });
+});
+
+const gmailToolbar = (prefix: string, range = "1–50 / 34,958 行", disabled: string[] = ["previous"]) => {
+  const state = (side: string) => disabled.includes(side) ? ' aria-disabled="true"' : "";
+  return `<div class="ar5 J-J5-Ji"><span class="Di">` +
+    `<div id="${prefix}-count" class="amH" role="button" tabindex="0" aria-haspopup="true" aria-label="メールをさらに表示">` +
+    `<span class="Dj">${range}</span></div>` +
+    `<div id="${prefix}-previous" class="amD" role="button"${state("previous")} data-tooltip="前" aria-label="前">` +
+    `<span class="amF">&nbsp;</span></div>` +
+    `<div id="${prefix}-next" class="amD" role="button" tabindex="0"${state("next")} data-tooltip="次" aria-label="次">` +
+    `<span class="amF">&nbsp;</span></div>` +
+    `</span></div>`;
+};
+
+test("the Gmail toolbar pager follows arrows while respecting aria-disabled", async () => {
+  await withPage(gmailToolbar("gmail"), ({ root, clicks, fallback, press }) => {
+    expect(press("ArrowRight")).toBe(true);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual(["gmail-next"]);
+    expect(fallback).toEqual([]);
+    root.querySelector("#gmail-previous")!.removeAttribute("aria-disabled");
+    root.querySelector("#gmail-count")!.textContent = "51–100 / 34,958 行";
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["gmail-next", "gmail-previous"]);
+  }, true, "/mail/u/0/#inbox", "", {}, "mail.google.com");
+});
+
+test("the lower of two Gmail toolbars serves the arrow keys", async () => {
+  await withPage(gmailToolbar("top") + gmailToolbar("bottom"), ({ clicks, press }) => {
+    expect(press("ArrowRight")).toBe(true);
+    expect(clicks).toEqual(["bottom-next"]);
+  }, true, "/mail/u/0/#inbox", "", {}, "mail.google.com");
+});
+
+test("the Gmail pager reads range counters in other languages", async () => {
+  for (const range of ["1–50 of 34,958", "1–50 von 34.958", "1–50 sur 34 958"]) {
+    await withPage(gmailToolbar("gmail", range), ({ clicks, press }) => {
+      expect(press("ArrowRight")).toBe(true);
+      expect(clicks).toEqual(["gmail-next"]);
+    }, true, "/mail/u/0/#inbox", "", {}, "mail.google.com");
+  }
+});
+
+test("a one-page Gmail list and an unpaired counter keep the arrows alone", async () => {
+  await withPage(gmailToolbar("gmail", "1–13 / 13 行", ["previous", "next"]), ({ clicks, press }) => {
+    expect(press("ArrowRight")).toBe(false);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual([]);
+  }, true, "/mail/u/0/#search/from%3Abob", "", {}, "mail.google.com");
+  const unpaired = gmailToolbar("gmail", "51–100 / 34,958 行", []).replace(/<div id="gmail-next".*?<\/div>/, "");
+  await withPage(unpaired, ({ clicks, press }) => {
+    expect(press("ArrowRight")).toBe(false);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual([]);
+  }, true, "/mail/u/0/#inbox", "", {}, "mail.google.com");
+});
+
+test("the Gmail pager stays on Gmail hosts", async () => {
+  await withPage(gmailToolbar("gmail"), ({ clicks, fallback, press }) => {
+    expect(press("ArrowRight")).toBe(false);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual([]);
+    expect(fallback).toEqual([]);
   });
 });
 
