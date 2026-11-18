@@ -20,9 +20,9 @@ const listing = `<div id="items">
 const showMore = '<button id="more">Load more articles</button>';
 let documentSequence = 0;
 
-async function withPage(html: string, run: (page: Page) => void | Promise<void>, enabled = true, path = "/list", head = "",
-  decisions: Partial<Record<Direction, number>> = {}) {
-  const window = new Window({ url: "https://example.test" + path });
+async function withPage(html: string, run: (page: Page) => void | Promise<void>, enabled: boolean | Promise<boolean> = true, path = "/list", head = "",
+  decisions: Partial<Record<Direction, number>> = {}, host = "example.test") {
+  const window = new Window({ url: `https://${host}${path}` });
   patchSelectorEngine(window);
   const document = window.document as unknown as Document;
   document.head.innerHTML = head;
@@ -38,6 +38,11 @@ async function withPage(html: string, run: (page: Page) => void | Promise<void>,
   }
   for (const node of document.querySelectorAll<HTMLElement>('[id^="items"]')) {
     node.getBoundingClientRect = () => new window.DOMRect(10, 10, 400, 390);
+  }
+  for (const carousel of document.querySelectorAll('[aria-roledescription="carousel"],section[aria-label$=" carousel"]')) {
+    const center = 50 + 100 * row++;
+    carousel.getBoundingClientRect = () => new window.DOMRect(center - 50, 20, 100, 200);
+    hits.set(center, carousel);
   }
   document.elementFromPoint = x => hits.get(x) ?? null;
   const clicks: string[] = [];
@@ -100,6 +105,21 @@ async function withPage(html: string, run: (page: Page) => void | Promise<void>,
     }
   }
 }
+
+test("the latest arrow pressed while checking site access is handled when access is confirmed", async () => {
+  const status = Promise.withResolvers<boolean>();
+  const pagination = `<nav aria-label="Pagination"><a id="prev" rel="prev" href="/list/page/1?sort=views">Previous</a>
+    <span aria-current="page">2</span><a id="next" rel="next" href="/list/page/3?sort=views">Next</a></nav>`;
+  await withPage(pagination, async ({ root, clicks, press }) => {
+    root.ownerDocument.hasFocus = () => true;
+    expect(press("ArrowLeft")).toBe(false);
+    expect(press("ArrowRight")).toBe(false);
+    expect(clicks).toEqual([]);
+    status.resolve(true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(clicks).toEqual(["next"]);
+  }, status.promise, "/list/page/2?sort=views");
+});
 
 test("load more is one click per batch and can retry after a stalled request", async () => {
   await withPage(`<main>${listing}${showMore}</main>`, ({ root, clicks, press, advanceClock }) => {
@@ -193,6 +213,246 @@ test("focused widgets and horizontal scroll regions keep their arrow keys", asyn
   }, true, "/list?page=2");
 });
 
+const carouselMarkup = `<section aria-roledescription="carousel" aria-label="Product photos">
+  <label>Caption <input id="caption"></label>
+  <button id="previous-slide" aria-label="Previous slide" disabled>‹</button>
+  <button id="next-slide" aria-label="次の画像">›</button>
+  <div aria-roledescription="slide"><button id="slide-action">Next</button></div>
+</section>`;
+const adjacentPages = `<nav aria-label="Pagination">
+  <a id="previous-page" href="?page=1" rel="prev">Previous</a>
+  <span aria-current="page">2</span>
+  <a id="next-page" href="?page=3" rel="next">Next</a>
+</nav>`;
+
+function moveMouse(target: Element) {
+  const { left, top, width, height } = target.getBoundingClientRect();
+  const event = new (target.ownerDocument.defaultView!).PointerEvent("pointermove", {
+    bubbles: true, pointerType: "mouse", clientX: left + width / 2, clientY: top + height / 2, movementX: 1,
+  });
+  Object.defineProperty(event, "isTrusted", { value: true });
+  target.dispatchEvent(event);
+}
+
+test("arrows use one visible carousel without focus and require a selection when there are several", async () => {
+  await withPage(carouselMarkup, ({ root, clicks, press, cover }) => {
+    const next = root.querySelector<HTMLButtonElement>("#next-slide")!;
+    expect(press()).toBe(true);
+    expect(root.ownerDocument.activeElement).toBe(root);
+    cover("next-slide");
+    expect(press()).toBe(false);
+    expect(next.disabled).toBe(false);
+    expect(clicks).toEqual(["next-slide"]);
+  });
+
+  const another = carouselMarkup.replace('id="next-slide"', 'id="another-slide"');
+  await withPage(carouselMarkup + another, ({ root, clicks, press }) => {
+    expect(press()).toBe(false);
+    moveMouse(root.querySelector("#another-slide")!);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["another-slide"]);
+  });
+});
+
+test("a named carousel's arrow buttons can sit outside its nested carousel track", async () => {
+  const banner = `<section aria-label="Featured product carousel">
+    <button id="banner-prev"><span aria-hidden="true"></span><span>Previous slide</span></button>
+    <div id="track" aria-roledescription="carousel" tabindex="0">Product photos</div>
+    <button id="banner-next"><span aria-hidden="true"></span><span>Next slide</span></button>
+  </section>`;
+  await withPage(banner, ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["banner-next", "banner-prev"]);
+  });
+
+  await withPage(banner + adjacentPages, ({ root, clicks, press }) => {
+    const track = root.querySelector<HTMLElement>("#track")!;
+    expect(press()).toBe(true);
+    moveMouse(track);
+    expect(press()).toBe(true);
+    track.focus();
+    expect(press("ArrowLeft", false, track)).toBe(true);
+    track.setAttribute("aria-keyshortcuts", "ArrowRight");
+    expect(press("ArrowRight", false, track)).toBe(false);
+    expect(clicks).toEqual(["next-page", "banner-next", "banner-prev"]);
+  }, true, "/list?page=2");
+});
+
+test("paging wins until the mouse selects a carousel, and scrolling the page clears that selection", async () => {
+  await withPage(carouselMarkup + adjacentPages, ({ root, clicks, press, cover }) => {
+    const next = root.querySelector<HTMLButtonElement>("#next-slide")!;
+    const page = root.querySelector<HTMLElement>("#next-page")!;
+    const view = root.ownerDocument.defaultView!;
+
+    expect(press()).toBe(true);
+    moveMouse(next);
+    expect(press()).toBe(true);
+    next.parentElement!.dispatchEvent(new view.Event("scroll", { bubbles: true }));
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(false);
+
+    page.focus();
+    expect(press("ArrowRight", false, page)).toBe(true);
+    page.blur();
+    root.ownerDocument.dispatchEvent(new view.Event("scroll"));
+    expect(press()).toBe(true);
+    moveMouse(next.parentElement!);
+    cover("next-slide");
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["next-page", "next-slide", "next-slide", "next-page", "next-page", "next-page"]);
+  }, true, "/list?page=2");
+});
+
+test("load more keeps the arrow keys without mouse selection, including while a batch is pending", async () => {
+  await withPage(`<main>${carouselMarkup}${listing}${showMore}</main>`, ({ root, clicks, press }) => {
+    root.querySelector<HTMLButtonElement>("#previous-slide")!.disabled = false;
+    expect(press("ArrowLeft")).toBe(false);
+    expect(press("ArrowRight")).toBe(true);
+    expect(press("ArrowRight")).toBe(false);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual(["more"]);
+  });
+});
+
+test("arrows use the focused carousel controls and return to the pager outside", async () => {
+  await withPage(carouselMarkup + adjacentPages, ({ root, clicks, fallback, press }) => {
+    const next = root.querySelector<HTMLButtonElement>("#next-slide")!;
+    const previous = root.querySelector<HTMLButtonElement>("#previous-slide")!;
+    expect(press("ArrowLeft", false, next)).toBe(false);
+    expect(press("ArrowRight", false, root.querySelector("#caption")!)).toBe(false);
+    next.focus();
+    next.addEventListener("click", () => {
+      previous.disabled = false;
+      next.disabled = true;
+    });
+    expect(press("ArrowRight", false, next)).toBe(true);
+    expect(root.ownerDocument.activeElement).toBe(previous);
+    expect(press("ArrowRight", false, previous)).toBe(false);
+    expect(press("ArrowLeft", false, previous)).toBe(true);
+    expect(press("ArrowRight", false, root)).toBe(true);
+    expect(clicks).toEqual(["next-slide", "previous-slide", "next-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("carousel actions yield to site shortcuts and require an available unique button", async () => {
+  const html = carouselMarkup.replace("</section>", '<button id="duplicate" hidden>Next slide</button></section>');
+  await withPage(html + adjacentPages, ({ root, clicks, cover, press }) => {
+    const next = root.querySelector("#next-slide")!;
+    const carousel = next.parentElement!;
+    const duplicate = root.querySelector<HTMLButtonElement>("#duplicate")!;
+    next.addEventListener("keydown", event => event.preventDefault(), { once: true });
+    press("ArrowRight", false, next);
+    expect(clicks).toEqual([]);
+
+    carousel.setAttribute("aria-keyshortcuts", "ArrowRight");
+    expect(press("ArrowRight", false, next)).toBe(false);
+    carousel.removeAttribute("aria-keyshortcuts");
+
+    duplicate.hidden = false;
+    expect(press("ArrowRight", false, next)).toBe(false);
+    duplicate.hidden = true;
+    cover("next-slide");
+    expect(press("ArrowRight", false, next)).toBe(false);
+    expect(clicks).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("focus selects one of two carousels before the list pager", async () => {
+  const galleries = ["first", "second"].map(key => `<section aria-roledescription="carousel" aria-label="Gallery">
+    <div id="${key}-track" tabindex="0">Slide</div>
+    <button id="${key}-next" aria-label="Next slide">›</button>
+  </section>`).join("");
+  await withPage(galleries + adjacentPages, ({ root, clicks, fallback, press }) => {
+    for (const key of ["first", "second"]) {
+      const track = root.querySelector<HTMLElement>(`#${key}-track`)!;
+      track.focus();
+      expect(press("ArrowRight", false, track)).toBe(true);
+      track.blur();
+    }
+    expect(press("ArrowRight", false, root)).toBe(true);
+    expect(clicks).toEqual(["first-next", "second-next", "next-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("a dots-only carousel keeps its tab navigation and leaves paging available outside", async () => {
+  const carousel = `<section aria-roledescription="carousel" aria-label="Gallery">
+    <div role="tablist">
+      <button id="first-dot" role="tab" aria-selected="true">1</button>
+      <button id="second-dot" role="tab" aria-selected="false">2</button>
+    </div>
+  </section>`;
+  await withPage(carousel + adjacentPages, ({ root, clicks, fallback, press }) => {
+    const first = root.querySelector<HTMLButtonElement>("#first-dot")!;
+    const second = root.querySelector<HTMLButtonElement>("#second-dot")!;
+    first.addEventListener("keydown", event => {
+      if (event.key !== "ArrowRight") return;
+      event.preventDefault();
+      first.setAttribute("aria-selected", "false");
+      second.setAttribute("aria-selected", "true");
+      second.focus();
+    });
+    first.focus();
+    expect(press("ArrowRight", false, first)).toBe(true);
+    expect(root.ownerDocument.activeElement).toBe(second);
+    expect(second.getAttribute("aria-selected")).toBe("true");
+    expect(clicks).toEqual([]);
+    second.blur();
+    expect(press("ArrowLeft", false, root)).toBe(true);
+    expect(clicks).toEqual(["previous-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("an item in a horizontal scroll rail keeps its arrow keys", async () => {
+  const rail = `<div id="rail" style="overflow-x:auto;scroll-snap-type:x mandatory">
+    <a id="rail-item" href="/items/a">Item A</a><a href="/items/b">Item B</a>
+  </div>`;
+  await withPage(rail + adjacentPages, ({ root, clicks, fallback, press }) => {
+    const scroller = root.querySelector<HTMLElement>("#rail")!;
+    const item = root.querySelector<HTMLAnchorElement>("#rail-item")!;
+    Object.defineProperties(scroller, { clientWidth: { value: 240 }, scrollWidth: { value: 480 } });
+    item.focus();
+    expect(press("ArrowRight", false, item)).toBe(false);
+    expect(clicks).toEqual([]);
+    item.blur();
+    expect(press("ArrowRight", false, root)).toBe(true);
+    expect(clicks).toEqual(["next-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("an unnamed transform gallery can claim a key before list paging", async () => {
+  const gallery = `<section><div id="track" tabindex="0" style="overflow:hidden">
+    <div id="slides" style="transform:translateX(0px)">Slides</div>
+  </div><button id="gallery-next" aria-label="Next slide">›</button></section>`;
+  await withPage(gallery + adjacentPages, ({ root, clicks, fallback, press }) => {
+    const track = root.querySelector<HTMLElement>("#track")!;
+    const slides = root.querySelector<HTMLElement>("#slides")!;
+    track.addEventListener("keydown", event => {
+      if (event.key !== "ArrowRight") return;
+      event.preventDefault();
+      slides.style.transform = "translateX(-100px)";
+    }, { once: true });
+    track.focus();
+    expect(press("ArrowRight", false, track)).toBe(true);
+    expect(slides.style.transform).toBe("translateX(-100px)");
+    expect(clicks).toEqual([]);
+    expect(press("ArrowRight", false, track)).toBe(true);
+    expect(clicks).toEqual(["next-page"]);
+    expect(fallback).toEqual([]);
+  }, true, "/list?page=2");
+});
+
+test("a disabled site keeps its carousel controls", async () => {
+  await withPage(carouselMarkup, ({ root, clicks, press }) => {
+    expect(press("ArrowRight", false, root.querySelector("#next-slide")!)).toBe(false);
+    expect(clicks).toEqual([]);
+  }, false);
+});
+
 test("load more follows successive links when the address stays on the first page", async () => {
   const link = '<a id="more" href="/list/page/2/">Load more articles</a>';
   await withPage(`<main>${listing}${link}</main>`, ({ root, clicks, press, advanceClock }) => {
@@ -274,6 +534,70 @@ test("a WooCommerce load-more link can follow a distant product list", async () 
   await withPage(html, ({ clicks, press }) => {
     expect(press()).toBe(true);
     expect(clicks).toEqual(["more"]);
+  });
+});
+
+const gmailToolbar = (prefix: string, range = "1–50 of 34,958", disabled: string[] = ["previous"]) => {
+  const state = (side: string) => disabled.includes(side) ? ' aria-disabled="true"' : "";
+  return `<div class="ar5 J-J5-Ji"><span class="Di">` +
+    `<div id="${prefix}-count" class="amH" role="button" tabindex="0" aria-haspopup="true" aria-label="Show more messages">` +
+    `<span class="Dj">${range}</span></div>` +
+    `<div id="${prefix}-previous" class="amD" role="button"${state("previous")} data-tooltip="Newer" aria-label="Newer">` +
+    `<span class="amF">&nbsp;</span></div>` +
+    `<div id="${prefix}-next" class="amD" role="button" tabindex="0"${state("next")} data-tooltip="Older" aria-label="Older">` +
+    `<span class="amF">&nbsp;</span></div>` +
+    `</span></div>`;
+};
+
+test("the Gmail toolbar pager follows arrows while respecting aria-disabled", async () => {
+  await withPage(gmailToolbar("gmail"), ({ root, clicks, fallback, press }) => {
+    expect(press("ArrowRight")).toBe(true);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual(["gmail-next"]);
+    expect(fallback).toEqual([]);
+    root.querySelector("#gmail-previous")!.removeAttribute("aria-disabled");
+    root.querySelector("#gmail-count")!.textContent = "51–100 of 34,958";
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["gmail-next", "gmail-previous"]);
+  }, true, "/mail/u/0/#inbox", "", {}, "mail.google.com");
+});
+
+test("the lower of two Gmail toolbars serves the arrow keys", async () => {
+  await withPage(gmailToolbar("top") + gmailToolbar("bottom"), ({ clicks, press }) => {
+    expect(press("ArrowRight")).toBe(true);
+    expect(clicks).toEqual(["bottom-next"]);
+  }, true, "/mail/u/0/#inbox", "", {}, "mail.google.com");
+});
+
+test("the Gmail pager reads range counters in other languages", async () => {
+  for (const range of ["1–50 / 34,958 行", "1–50 von 34.958", "1–50 sur 34 958"]) {
+    await withPage(gmailToolbar("gmail", range), ({ clicks, press }) => {
+      expect(press("ArrowRight")).toBe(true);
+      expect(clicks).toEqual(["gmail-next"]);
+    }, true, "/mail/u/0/#inbox", "", {}, "mail.google.com");
+  }
+});
+
+test("a one-page Gmail list and an unpaired counter keep the arrows alone", async () => {
+  await withPage(gmailToolbar("gmail", "1–13 of 13", ["previous", "next"]), ({ clicks, press }) => {
+    expect(press("ArrowRight")).toBe(false);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual([]);
+  }, true, "/mail/u/0/#search/from%3Abob", "", {}, "mail.google.com");
+  const unpaired = gmailToolbar("gmail", "51–100 of 34,958", []).replace(/<div id="gmail-next".*?<\/div>/, "");
+  await withPage(unpaired, ({ clicks, press }) => {
+    expect(press("ArrowRight")).toBe(false);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual([]);
+  }, true, "/mail/u/0/#inbox", "", {}, "mail.google.com");
+});
+
+test("the Gmail pager stays on Gmail hosts", async () => {
+  await withPage(gmailToolbar("gmail"), ({ clicks, fallback, press }) => {
+    expect(press("ArrowRight")).toBe(false);
+    expect(press("ArrowLeft")).toBe(false);
+    expect(clicks).toEqual([]);
+    expect(fallback).toEqual([]);
   });
 });
 
