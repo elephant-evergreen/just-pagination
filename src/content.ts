@@ -7,15 +7,24 @@ type Decisions = import("./protocol.js").Decisions;
   if (installed.justPaginationInstalled) return;
   installed.justPaginationInstalled = true;
 
-  const controlSelector = "a[href], button, [role=button]";
-  const widgetRegions = 'dialog,[role=dialog],[role=alertdialog],[aria-roledescription="carousel" i]';
+  const buttonSelector = "button,[role=button]";
+  const controlSelector = "a[href]," + buttonSelector;
+  const namedCarousel = ':is(section,[role=region],[role=group])' +
+    ':is([aria-label="carousel" i],[aria-label^="carousel " i],[aria-label$=" carousel" i])';
+  const carouselRegion = '[aria-roledescription="carousel" i],[aria-roledescription="カルーセル"],[aria-roledescription="スライドショー"],' +
+    namedCarousel;
+  const widgetRegions = "dialog,[role=dialog],[role=alertdialog]";
   const protectedControls = "input, textarea, select, [contenteditable]:not([contenteditable=false]), " +
     "[role=textbox], [role=slider], [role=spinbutton], [role=combobox], [role=listbox], [role=menu], " +
     "[role=tablist], [role=grid], [role=tree], video, audio," + widgetRegions;
-  const nonPagination = widgetRegions + ",[role=menu],[role=tablist],[role=grid],[role=tree]";
+  const nonPagination = widgetRegions + "," + carouselRegion + ",[role=menu],[role=tablist],[role=grid],[role=tree]";
   const labels: Record<Direction, RegExp> = {
     previous: /^(?:‹|←|❮|<|prev(?:ious)?(?:\s+page)?|newer\s+(?:posts|entries|articles)|前(?:へ|のページ)|前ページ)$/iu,
     next: /^(?:›|→|❯|>|next(?:\s+page)?|older\s+(?:posts|entries|articles)|次(?:へ|のページ)|次ページ)$/iu,
+  };
+  const slideLabels: Record<Direction, RegExp> = {
+    previous: /^(?:‹|←|❮|<|(?:(?:show|go to(?: the)?) )?prev(?:ious)?(?: (?:slide|image|photo))?|前へ|前の(?:スライド|画像|写真))$/iu,
+    next: /^(?:›|→|❯|>|(?:(?:show|go to(?: the)?) )?next(?: (?:slide|image|photo))?|次へ|次の(?:スライド|画像|写真))$/iu,
   };
   const navWords = /paginat|paging|(?:^|[\W_])pager(?:$|[\W_])|ページネーション|ページ送り|ページ移動|page[ -]?(?:nav(?:igation)?|numbers)/i;
   const ajaxLoadMoreButton = ".alm-btn-wrap > button.alm-load-more-btn";
@@ -36,7 +45,11 @@ type Decisions = import("./protocol.js").Decisions;
   const pagePath = /\/(?:page[\/=-]|p)\d+(?:\.html)?\/?$/i;
   const numberedPath = /\/(\d{1,6})\/?$/;
   const trackingParameter = /^(?:utm_.+|gclid|fbclid|ved)$/i;
+  const gmailHost = "mail.google.com";
+  const gmailRange = /^\d{1,7}\s*[–—-]\s*\d{1,7}\s*(?:\/|\p{L}{1,4})\s*[\d\s,.]+(?:\s*\p{L}{1,4})?$/iu;
   let enabled = false;
+  let startupStatus: Promise<void> | undefined;
+  let pendingStartupKey: KeyboardEvent | undefined;
   let refreshRevision = 0;
   let timer: number | undefined;
   let documentURL = location.href;
@@ -46,6 +59,7 @@ type Decisions = import("./protocol.js").Decisions;
   const fingerprints = new WeakMap<HTMLElement, string>();
   type LoadMore = { control: HTMLElement; list: Element; itemCount: number; page?: ReturnType<typeof pageAddress> };
   let pendingLoadMore: Omit<LoadMore, "control"> & { address: string; retryAt: number } | undefined;
+  let carouselPointer: { carousel: Element; x: number; y: number } | undefined;
 
   function safeDestination(raw: string): string | undefined {
     try {
@@ -58,18 +72,21 @@ type Decisions = import("./protocol.js").Decisions;
     }
   }
 
-  function usable(node: Element): node is HTMLElement {
+  function availableControl(node: Element): node is HTMLElement {
     if (!(node instanceof HTMLElement) || !node.isConnected || !node.getClientRects().length) return false;
-    if (node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled,[aria-busy=true]," +
-        nonPagination + ",form[method=dialog]")) return false;
-    if (getComputedStyle(node).visibility !== "visible") return false;
+    return !node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled,[aria-busy=true]") &&
+      getComputedStyle(node).visibility === "visible";
+  }
+
+  function usable(node: Element): node is HTMLElement {
+    if (node.closest(nonPagination + ",form[method=dialog]") || !availableControl(node)) return false;
     if (node instanceof HTMLAnchorElement) {
       if (node.hasAttribute("download") || (node.target && node.target !== "_self") || !safeDestination(node.href)) return false;
       if (!node.closest("form") || pageAddress(new URL(node.href))) return true;
       const direction = directionOf(node);
       return direction !== "unknown" && adjacentAddress(node.href, direction);
     }
-    return node.matches("button,[role=button]") && !node.closest("a,form") &&
+    return node.matches(buttonSelector) && !node.closest("a,form") &&
       (!(node instanceof HTMLButtonElement) || !node.form);
   }
 
@@ -573,6 +590,35 @@ type Decisions = import("./protocol.js").Decisions;
     return found;
   }
 
+  function gmailPager(): Targets {
+    if (location.hostname !== gmailHost) return {};
+    const pagers: Targets[] = [];
+    for (const counter of document.querySelectorAll<HTMLElement>("[role=button]")) {
+      const text = (counter.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (!gmailRange.test(text) || counter.querySelector("[role=button]")) continue;
+      const siblings = [...(counter.parentElement?.children ?? [])].filter((sibling): sibling is HTMLElement =>
+        sibling !== counter && sibling instanceof HTMLElement && sibling.matches("[role=button]"));
+      if (siblings.length !== 2) continue;
+      pagers.push({
+        previous: availableControl(siblings[0]) ? siblings[0] : undefined,
+        next: availableControl(siblings[1]) ? siblings[1] : undefined,
+      });
+    }
+    for (let index = pagers.length - 1; index >= 0; index--) {
+      if (pagers[index].previous || pagers[index].next) return pagers[index];
+    }
+    return {};
+  }
+
+  function gmailClick(target: HTMLElement) {
+    const { left, top, width, height } = target.getBoundingClientRect();
+    const init = { bubbles: true, cancelable: true, button: 0,
+      clientX: left + width / 2, clientY: top + height / 2 };
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      target.dispatchEvent(new window.PointerEvent(type, init));
+    }
+  }
+
   function documentPage(direction: Direction, anchors: HTMLAnchorElement[], groups: Group[]) {
     const destinations = new Set<string>();
     const rel = direction === "next" ? '[rel~="next" i]' : '[rel~="prev" i],[rel~="previous" i]';
@@ -664,6 +710,11 @@ type Decisions = import("./protocol.js").Decisions;
       if (candidates.size === 1) solid[direction] = candidates.values().next().value;
     }
 
+    const gmail = gmailPager();
+    for (const direction of directions) {
+      if (!solid[direction] && gmail[direction]) solid[direction] = gmail[direction];
+    }
+
     const candidates: { target: HTMLElement; data: CandidateShape }[] = [];
     if (groups.length === 1) {
       const group = groups[0];
@@ -743,7 +794,7 @@ type Decisions = import("./protocol.js").Decisions;
   }
 
   function schedule() {
-    if (!enabled) return;
+    if (!enabled || document.readyState === "loading") return;
     if (timer !== undefined) return;
     timer = window.setTimeout(() => {
       timer = undefined;
@@ -769,6 +820,7 @@ type Decisions = import("./protocol.js").Decisions;
   async function refresh(jevChanged = false) {
     const revision = ++refreshRevision;
     enabled = false;
+    carouselPointer = undefined;
     observer.disconnect();
     if (jevChanged) {
       assisted = {};
@@ -785,7 +837,12 @@ type Decisions = import("./protocol.js").Decisions;
     if (!enabled) {
       assisted = {};
       classificationAttempt = undefined;
+      return;
     }
+    if (document.readyState !== "loading") observePagination();
+  }
+
+  function observePagination() {
     if (!enabled) return;
     observer.observe(document.documentElement, {
       subtree: true, childList: true, characterData: true, attributes: true,
@@ -818,6 +875,78 @@ type Decisions = import("./protocol.js").Decisions;
     return overflowX === "auto" || overflowX === "scroll";
   }
 
+  function carouselOwnsShortcut(carousel: Element, key: string) {
+    const shortcut = `[aria-keyshortcuts~="${key}" i]`;
+    return carousel.matches(shortcut) || [...carousel.querySelectorAll(shortcut)].some(node => node.closest(carouselRegion) === carousel);
+  }
+
+  function* carouselControls(carousel: Element) {
+    for (const button of carousel.querySelectorAll(buttonSelector)) {
+      if (button.closest(carouselRegion) !== carousel ||
+          button.closest('a,form,nav,[role=navigation],[aria-roledescription="slide" i],[aria-roledescription="スライド"],[aria-expanded],' +
+            protectedControls) || button instanceof HTMLButtonElement && button.form) continue;
+      const [name] = label(button);
+      const direction = name && directions.find(value => slideLabels[value].test(name));
+      if (direction) yield { button, direction };
+    }
+  }
+
+  function carouselForKey(carousel: Element, key: string) {
+    for (let region: Element | null | undefined = carousel; region; region = region.parentElement?.closest(carouselRegion)) {
+      if (!carouselControls(region).next().done || carouselOwnsShortcut(region, key)) return region;
+    }
+    return carousel;
+  }
+
+  function carouselTarget(carousel: Element, direction: Direction) {
+    let target: HTMLElement | undefined;
+    for (const { button, direction: buttonDirection } of carouselControls(carousel)) {
+      if (direction !== buttonDirection || !availableControl(button)) continue;
+      const { left, top, width, height } = button.getBoundingClientRect();
+      if (!button.contains(document.elementFromPoint(left + width / 2, top + height / 2))) continue;
+      if (target) return;
+      target = button;
+    }
+    return target;
+  }
+
+  function carouselHasVisibleControls(carousel: Element) {
+    return Boolean(carouselTarget(carousel, "next") || carouselTarget(carousel, "previous"));
+  }
+
+  function singleVisibleCarousel() {
+    let visible: Element | undefined;
+    for (const carousel of document.querySelectorAll(carouselRegion)) {
+      const { left, top, width, height } = carousel.getBoundingClientRect();
+      if (!width || !height || !carousel.contains(document.elementFromPoint(left + width / 2, top + height / 2))) continue;
+      if (!carouselHasVisibleControls(carousel)) continue;
+      if (visible) return;
+      visible = carousel;
+    }
+    return visible;
+  }
+
+  function pointedCarousel(key: string) {
+    const pointer = carouselPointer;
+    if (pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest(carouselRegion) === pointer.carousel) {
+      const carousel = carouselForKey(pointer.carousel, key);
+      if (carouselHasVisibleControls(carousel)) return carousel;
+    }
+  }
+
+  function turnSlide(carousel: Element, target: HTMLElement, direction: Direction) {
+    const activeBefore = document.activeElement;
+    const focused = carousel.contains(activeBefore) ? activeBefore : null;
+    target.click();
+    if (!focused) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== focused) return;
+    if (active === focused && !focused.matches(":disabled") && focused.getClientRects().length &&
+        getComputedStyle(focused).visibility === "visible") return;
+    const available = carouselTarget(carousel, direction) ?? carouselTarget(carousel, direction === "next" ? "previous" : "next");
+    available?.focus({ preventScroll: true });
+  }
+
   chrome.runtime.onMessage.addListener((message: unknown) => {
     if (typeof message === "object" && message !== null && "type" in message && message.type === "refresh") {
       void refresh("jevChanged" in message && message.jevChanged === true);
@@ -825,17 +954,70 @@ type Decisions = import("./protocol.js").Decisions;
   });
   window.addEventListener("popstate", schedule);
   (window as Window & { navigation?: EventTarget }).navigation?.addEventListener("currententrychange", schedule);
-  window.addEventListener("keydown", event => {
-    if (!enabled || !event.isTrusted || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey ||
+  window.addEventListener("pointermove", event => {
+    if (!enabled || !event.isTrusted || event.pointerType !== "mouse" || (!event.movementX && !event.movementY)) return;
+    const carousel = event.buttons === 0 && event.target instanceof Element && event.target.closest(carouselRegion);
+    carouselPointer = carousel ? { carousel, x: event.clientX, y: event.clientY } : undefined;
+  }, { capture: true, passive: true });
+  window.addEventListener("scroll", event => {
+    if (carouselPointer && (!(event.target instanceof Element) || !carouselPointer.carousel.contains(event.target))) {
+      carouselPointer = undefined;
+    }
+  }, { capture: true, passive: true });
+  window.addEventListener("pointerout", event => {
+    if (event.relatedTarget === null) carouselPointer = undefined;
+  }, { capture: true, passive: true });
+  window.addEventListener("blur", () => {
+    carouselPointer = undefined;
+    pendingStartupKey = undefined;
+  });
+  async function handleKeydown(event: KeyboardEvent) {
+    if (!event.isTrusted || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey ||
         event.altKey || event.metaKey || event.ctrlKey) return;
     const direction = event.key === "ArrowLeft" ? "previous" : event.key === "ArrowRight" ? "next" : undefined;
-    if (!direction || event.composedPath().some(siteUsesArrowKeys)) return;
+    if (!direction) return;
+    const path = event.composedPath();
+    if (!enabled && startupStatus) {
+      const focus = document.activeElement;
+      const address = location.href;
+      const pressedAt = performance.now();
+      pendingStartupKey = event;
+      await startupStatus;
+      if (pendingStartupKey !== event) return;
+      pendingStartupKey = undefined;
+      if (performance.now() - pressedAt > 500 || !document.hasFocus() ||
+          document.activeElement !== focus || location.href !== address) return;
+    }
+    if (!enabled || event.defaultPrevented) return;
+    if (path.some(siteUsesArrowKeys)) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
-    const inspected = inspectTargets();
-    if (!inspected) return;
-    const pageTarget = eligibleAtActuation(direction, inspected);
-    const more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
-    const target = pageTarget ?? more?.control;
+    const focusedCarousel = path.find((node): node is Element => node instanceof Element && node.matches(carouselRegion));
+    let carousel = focusedCarousel && carouselForKey(focusedCarousel, event.key);
+    let more: LoadMore | undefined;
+    let target: HTMLElement | undefined;
+    if (!carousel) {
+      const inspected = inspectTargets();
+      if (!inspected) return;
+      const pageTarget = eligibleAtActuation(direction, inspected);
+      const otherPageTarget = eligibleAtActuation(direction === "next" ? "previous" : "next", inspected);
+      const focused = document.activeElement;
+      const pagerFocused = inspected.group?.root.contains(focused) ||
+        pageTarget?.contains(focused) || otherPageTarget?.contains(focused);
+      if (!pagerFocused) carousel = pointedCarousel(event.key);
+      if (!carousel) {
+        more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
+        target = pageTarget ?? more?.control;
+        const loadingMore = pendingLoadMore?.address === location.href && performance.now() < pendingLoadMore.retryAt;
+        if (!target && !otherPageTarget && !inspected.group && !loadingMore) {
+          const visible = singleVisibleCarousel();
+          if (visible && (direction === "next" || !loadMoreAtEnd())) carousel = visible;
+        }
+      }
+    }
+    if (carousel) {
+      if (carouselOwnsShortcut(carousel, event.key)) return;
+      target = carouselTarget(carousel, direction);
+    }
     if (!target) return;
     for (const media of document.querySelectorAll<HTMLMediaElement>("video,audio")) {
       if (media.paused || media.ended) continue;
@@ -848,7 +1030,18 @@ type Decisions = import("./protocol.js").Decisions;
         list: more.list, itemCount: more.itemCount, page: more.page, address: location.href, retryAt: performance.now() + 5000,
       };
     }
-    target.click();
-  });
-  void refresh();
+    if (carousel) turnSlide(carousel, target, direction);
+    else if (location.hostname === gmailHost) gmailClick(target);
+    else target.click();
+  }
+  const keyOptions = location.hostname === gmailHost ? { capture: true } : undefined;
+  window.addEventListener("keydown", handleKeydown, keyOptions);
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", () => {
+      window.removeEventListener("keydown", handleKeydown, keyOptions);
+      window.addEventListener("keydown", handleKeydown, keyOptions);
+      observePagination();
+    }, { once: true });
+  }
+  startupStatus = refresh().finally(() => { startupStatus = undefined; });
 })();

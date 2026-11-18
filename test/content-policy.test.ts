@@ -89,7 +89,7 @@ async function policy(href: string): Promise<Policy> {
   Reflect.deleteProperty(globalThis, "justPaginationInstalled");
   Reflect.deleteProperty(globalThis, "__justPaginationPolicy");
   const js = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
-  const end = js.lastIndexOf("\n  refresh();\n})();");
+  const end = js.lastIndexOf("\n})();");
   if (end < 0) throw new Error("Could not expose content policy");
   const instrumented = js.slice(0, end) +
     "\n  Object.assign(globalThis, { __justPaginationPolicy: { inferredPage, routeEvidence, pageDirection, automatic, activationEvidence } });" +
@@ -190,7 +190,8 @@ test("route evidence stays on one page list and ignores unrelated links", async 
 });
 
 test("keyboard turns require trusted input and fresh eligibility", () => {
-  const keydown = source.slice(source.indexOf('window.addEventListener("keydown"'));
+  expect(source).toContain('window.addEventListener("keydown", handleKeydown, keyOptions)');
+  const keydown = source.slice(source.indexOf("function handleKeydown("));
   const trusted = keydown.indexOf("!event.isTrusted");
   const revalidate = keydown.indexOf("eligibleAtActuation(direction");
   const click = keydown.indexOf("target.click()");

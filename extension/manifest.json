@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Just Pagination",
-  "version": "0.0.3",
-  "description": "Move between pages of a list with the left and right arrow keys.",
+  "version": "0.0.4",
+  "description": "Move between list pages and carousel slides with the left and right arrow keys.",
   "minimum_chrome_version": "120",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://api.typesafe.ai/*"],
@@ -11,7 +11,7 @@
     "matches": ["https://*/*", "http://*/*"],
     "exclude_matches": ["https://api.typesafe.ai/*"],
     "js": ["content.js"],
-    "run_at": "document_idle"
+    "run_at": "document_start"
   }],
   "background": {"service_worker": "background.js", "type": "module"},
   "action": {"default_popup": "popup.html", "default_icon": {"16": "assets/icon-16.png", "32": "assets/icon-32.png"}},

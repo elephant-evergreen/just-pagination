@@ -1,8 +1,8 @@
-# <img src="extension/assets/icon.png" width="32" height="32" alt=""> Just Pagination <img src="media/chrome-extension-badge.svg" width="138" height="22" alt="Chrome extension">
+# <img src="extension/assets/icon.png" width="32" height="32" alt=""> Just Pagination <a href="https://chromewebstore.google.com/detail/just-pagination/ijhnpclghelmocegpignnkfgieifcaeb"><img src="media/chrome-extension-badge.svg" width="138" height="22" alt="Chrome extension"></a>
 
-Use ← and → to move between pages of search results, product listings, and other paginated lists in Chrome.
+Use ← and → in Chrome to turn pages in search results and other lists, or to move through slides in supported carousels.
 
-https://github.com/user-attachments/assets/53f53480-9ae6-4d7f-9dd7-44fd5e3d71df
+![Pressing the right arrow key turns pages on two example sites and in Just Pagination Settings](media/just-pagination.gif)
 
 [Photo credits](media/photo-credits.md)
 
@@ -14,15 +14,19 @@ You need desktop Chrome 120 or later.
 2. Click **Add to Chrome**.
 3. Click **Add extension** to confirm.
 
-In **Just Pagination Settings**, press ← or → under **Try the arrow keys** to turn a page. To reopen the sample, click **Settings** in the toolbar popup.
+In **Just Pagination Settings**, press ← or → under **Try the arrow keys** to turn a page. The sample works without a Jev API key. To reopen it, click **Settings** in the toolbar popup.
 
 ## Use it on a website
 
-Press ← or → on a list with previous or next pages. If the popup shows **No access**, check [Chrome’s site access settings](https://support.google.com/chrome/answer/2664769?hl=en).
+Press ← or → on a list with previous or next pages. The shortcut can respond while the page is still loading. For supported **Load more** controls, scroll until the control is visible and press → to load another batch. If the popup shows **No access**, check [Chrome’s site access settings](https://support.google.com/chrome/answer/2664769?hl=en).
+
+When a single carousel is visible and the page has no list navigation, press ← or → to move between slides. When list navigation is available, it takes priority by default. Move the pointer onto a carousel or press **Tab** to focus one of its slide buttons. Use the same selection when several carousels are visible. Supported carousels identify themselves and have labelled slide buttons.
+
+To try carousel support ahead of the next Chrome Web Store update, [build from source](#build-from-source) and open the [W3C carousel demo](https://www.w3.org/WAI/ARIA/apg/patterns/carousel/examples/carousel-1-prev-next/?norotate=true#ex_label).
 
 Open **Just Pagination** from Chrome’s extensions menu to **Disable** or **Enable** it on the current site. Use **Settings** in the popup to manage the list of disabled sites.
 
-Standard pagination is detected locally. To get help with ambiguous controls, enter an optional [TypeSafe Jev API key](https://console.typesafe.ai/keys) under **Settings** and click **Connect**. When connected, ambiguous controls may send navigation hints to TypeSafe. Usage charges may apply. See the [privacy policy](PRIVACY.md).
+Standard pagination and carousel navigation work locally without an API key. To get help with ambiguous page controls, enter an optional [TypeSafe Jev API key](https://console.typesafe.ai/keys) under **Settings** and click **Connect**. When connected, ambiguous page controls may send navigation hints to TypeSafe. Usage charges may apply. See the [privacy policy](PRIVACY.md).
 
 ## Build from source
 
