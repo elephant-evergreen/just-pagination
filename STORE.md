@@ -27,7 +27,6 @@ See the [privacy policy](PRIVACY.md) for data handling.
 
 ## Reviewer instructions
 
-1. Open the extension settings with the Jev API key field blank. Press Left and Right in the sample gallery, then select a page number.
-2. Open a paginated list on a site where Chrome grants access and verify both arrow keys. Choose **Disable** in the toolbar and confirm the shortcut stops on that site. Choose **Enable** to restore it.
-3. Open the [W3C carousel demo](https://www.w3.org/WAI/ARIA/apg/patterns/carousel/examples/carousel-1-prev-next/?norotate=true#ex_label). With the carousel visible, press Right and then Left without focusing a control. The demo advances one slide and then returns.
-4. To test the optional Jev connection, enter the dedicated test key provided in **Test instructions** and select **Connect**.
+Paste only the following paragraph into **Test instructions → Additional instructions**, which has a 500-character limit:
+
+In Settings, test Left/Right and page buttons without an API key. On a paginated site, test both arrows and toolbar Disable/Enable. Check carousel arrows at https://www.w3.org/WAI/ARIA/apg/patterns/carousel/examples/carousel-1-prev-next/?norotate=true#ex_label . Inputs must retain arrow keys. Optional Jev: enter the test key in Settings and click Connect.
