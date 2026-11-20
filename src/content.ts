@@ -30,7 +30,7 @@ type Decisions = import("./protocol.js").Decisions;
   const ajaxLoadMoreButton = ".alm-btn-wrap > button.alm-load-more-btn";
   const loadMoreLabels = [
     /^(?:load|show|see|view) (?:\d+ )?more(?: (?:products?|items?|results?|articles?|posts?|stories|recipes|projects|jobs|events|videos|news))?$/iu,
-    /^(?:(?:商品|記事|検索結果|結果|投稿|アイテム|製品)を)?もっと(?:見る|表示(?:する)?|読み込む)$/u,
+    /^(?:(?:商品|記事|検索結果|結果|投稿|アイテム|製品|無料増量漫画)を)?もっと(?:見る|みる|表示(?:する)?|読み込む)$/u,
     /^(?:mehr (?:(?:produkte|artikel|beiträge|ergebnisse) )?(?:laden|anzeigen)|meer (?:laden|tonen|weergeven|bekijken|(?:producten|artikelen|berichten) (?:laden|tonen))|laad meer)$/iu,
     /^(?:(?:afficher|voir|charger) plus(?: (?:de |d['’])(?:produits|articles|résultats|actualités))?|(?:cargar|mostrar|ver) más(?: (?:productos|resultados|artículos|entradas|noticias))?|(?:carregar|mostrar|ver) mais(?: (?:produtos|resultados|artigos|notícias))?|(?:carica|mostra|vedi) (?:altro|altri (?:prodotti|articoli|risultati)))$/iu,
   ];
@@ -96,11 +96,23 @@ type Decisions = import("./protocol.js").Decisions;
       .filter((value): value is string => Boolean(value)).map(value => value.trim().replace(/\s+/g, " "));
   }
 
+  function accessibleName(node: Element) {
+    const labelledby = node.getAttribute("aria-labelledby");
+    if (labelledby) {
+      const text = labelledby.split(/\s+/)
+        .map(id => node.ownerDocument?.getElementById(id)?.textContent ?? "").join(" ").trim();
+      if (text) return text;
+    }
+    const ariaLabel = node.getAttribute("aria-label")?.trim();
+    if (ariaLabel) return ariaLabel;
+    const content = node.textContent?.trim();
+    if (content) return content;
+    return node.getAttribute("title")?.trim() ?? "";
+  }
+
   function isLoadMoreLabel(node: Element) {
-    return label(node).some(value => {
-      const text = loadMoreText(value);
-      return loadMoreLabels.some(pattern => pattern.test(text));
-    });
+    const text = loadMoreText(accessibleName(node));
+    return text !== "" && loadMoreLabels.some(pattern => pattern.test(text));
   }
 
   function loadMoreText(value: string) {
@@ -495,7 +507,7 @@ type Decisions = import("./protocol.js").Decisions;
     const configured = (name: string) => loadMoreText((list.getAttribute(name) ?? "").replace(/<[^>]+>/g, "")).toLowerCase();
     const expected = configured("data-button-label");
     return Boolean(expected && expected !== configured("data-prev-button-label") &&
-      label(control).some(value => loadMoreText(value).toLowerCase() === expected));
+      loadMoreText(accessibleName(control)).toLowerCase() === expected);
   }
 
   function wooCommerceListing(control: HTMLElement): Pick<LoadMore, "list" | "itemCount"> | undefined {
@@ -560,11 +572,13 @@ type Decisions = import("./protocol.js").Decisions;
     for (const control of document.querySelectorAll(controlSelector)) {
       if (main && !control.closest("main,[role=main]")) continue;
       const ajaxListing = ajaxLoadMoreListing(control);
-      if ((!isLoadMoreLabel(control) && !declaresManualLoadMore(control, ajaxListing?.list)) || !usable(control) ||
+      const page = control instanceof HTMLAnchorElement ? pageAddress(new URL(control.href)) : undefined;
+      if (control instanceof HTMLAnchorElement) {
+        if (!page || !adjacentAddress(control.href, "next")) continue;
+      } else if (!isLoadMoreLabel(control) && !declaresManualLoadMore(control, ajaxListing?.list)) continue;
+      if (!usable(control) ||
           control.closest("aside,details,form,header,footer,.ajax-load-more-wrap.alm-loading") ||
           control.matches("[aria-expanded],[aria-haspopup],.alm-load-more-btn:is(.loading,.done)")) continue;
-      const page = control instanceof HTMLAnchorElement ? pageAddress(new URL(control.href)) : undefined;
-      if (control instanceof HTMLAnchorElement && (!page || !adjacentAddress(control.href, "next"))) continue;
       const { left, top, width, height } = control.getBoundingClientRect();
       const underPointer = document.elementFromPoint(left + width / 2, top + height / 2);
       if (!underPointer || !control.contains(underPointer)) continue;
