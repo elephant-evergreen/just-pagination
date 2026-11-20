@@ -45,7 +45,7 @@ jobs:
             "repos/$REPO/actions/workflows/check.yml/runs?head_sha=$commit&branch=main&event=push&status=success&per_page=1" \
             --jq '.workflow_runs | length')
           [ "$runs" -gt 0 ] || fail "Check has not succeeded for $commit on main."
-      - uses: jdx/mise-action@v5.2.9
+      - uses: jdx/mise-action@v5.2.10
         with:
           version: '2026.11.9'
           cache: false
