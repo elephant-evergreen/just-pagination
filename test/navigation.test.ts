@@ -735,3 +735,62 @@ test("disclosures, ambiguous lists, and disabled sites leave the key alone", asy
     }, enabled);
   }
 });
+
+const mangaListing = Array.from({ length: 30 }, (_, index) =>
+  `<li><a href="/comic/${index}">${index}</a></li>`).join("");
+
+test("a listed append button is pressed when its control name is a known label", async () => {
+  await withPage(`<main><ul id="items">${mangaListing}</ul><div class="py-2">` +
+    '<button id="more" class="rounded border">無料増量漫画をもっとみる</button></div></main>',
+  ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["more"]);
+  });
+});
+
+test("a child label does not override the control name", async () => {
+  await withPage(`<main>${listing}<button id="more" aria-label="Buy all selected products">` +
+    "<span>Show more</span></button></main>",
+  ({ clicks, press }) => {
+    expect(press()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
+  await withPage(`<main>${listing}<button id="more" aria-label="絞り込む">もっと見る</button></main>`,
+    ({ clicks, press }) => {
+      expect(press()).toBe(false);
+      expect(clicks).toEqual([]);
+    });
+});
+
+test("a labelled-by control name is used for the load more decision", async () => {
+  await withPage(`<main>${listing}<button id="more" aria-labelledby="more-name"></button>` +
+    '<span id="more-name">Load more articles</span></main>',
+  ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["more"]);
+  });
+});
+
+test("a next-page link is enough evidence without a load more label", async () => {
+  await withPage(`<main>${listing}<a id="more" href="/list/page/2/">続きを読む</a></main>`,
+    ({ clicks, press }) => {
+      expect(press()).toBe(true);
+      expect(clicks).toEqual(["more"]);
+    });
+});
+
+test("an aria-controls reference alone is not evidence to press a button", async () => {
+  await withPage(`<main>${listing}<button id="more" aria-controls="items">絞り込む</button></main>`,
+    ({ clicks, press }) => {
+      expect(press()).toBe(false);
+      expect(clicks).toEqual([]);
+    });
+});
+
+test("two append candidates are left alone rather than picking one", async () => {
+  await withPage(`<main>${listing}${showMore}<button id="more-2">Load more articles</button></main>`,
+    ({ clicks, press }) => {
+      expect(press()).toBe(false);
+      expect(clicks).toEqual([]);
+    });
+});
