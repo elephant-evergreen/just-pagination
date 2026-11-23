@@ -9,24 +9,30 @@ type Decisions = import("./protocol.js").Decisions;
 
   const buttonSelector = "button,[role=button]";
   const controlSelector = "a[href]," + buttonSelector;
-  const namedCarousel = ':is(section,[role=region],[role=group])' +
+  const namedCarousel =
+    ":is(section,[role=region],[role=group])" +
     ':is([aria-label="carousel" i],[aria-label^="carousel " i],[aria-label$=" carousel" i])';
-  const carouselRegion = '[aria-roledescription="carousel" i],[aria-roledescription="カルーセル"],[aria-roledescription="スライドショー"],' +
+  const carouselRegion =
+    '[aria-roledescription="carousel" i],[aria-roledescription="カルーセル"],[aria-roledescription="スライドショー"],' +
     namedCarousel;
   const widgetRegions = "dialog,[role=dialog],[role=alertdialog]";
-  const protectedControls = "input, textarea, select, [contenteditable]:not([contenteditable=false]), " +
+  const protectedControls =
+    "input, textarea, select, [contenteditable]:not([contenteditable=false]), " +
     "[role=textbox], [role=slider], [role=spinbutton], [role=combobox], [role=listbox], [role=menu], " +
-    "[role=tablist], [role=grid], [role=tree], video, audio," + widgetRegions;
+    "[role=tablist], [role=grid], [role=tree], video, audio," +
+    widgetRegions;
   const nonPagination = widgetRegions + "," + carouselRegion + ",[role=menu],[role=tablist],[role=grid],[role=tree]";
   const labels: Record<Direction, RegExp> = {
     previous: /^(?:‹|←|❮|<|prev(?:ious)?(?:\s+page)?|newer\s+(?:posts|entries|articles)|前(?:へ|のページ)|前ページ)$/iu,
     next: /^(?:›|→|❯|>|next(?:\s+page)?|older\s+(?:posts|entries|articles)|次(?:へ|のページ)|次ページ)$/iu,
   };
   const slideLabels: Record<Direction, RegExp> = {
-    previous: /^(?:‹|←|❮|<|(?:(?:show|go to(?: the)?) )?prev(?:ious)?(?: (?:slide|image|photo))?|前へ|前の(?:スライド|画像|写真))$/iu,
+    previous:
+      /^(?:‹|←|❮|<|(?:(?:show|go to(?: the)?) )?prev(?:ious)?(?: (?:slide|image|photo))?|前へ|前の(?:スライド|画像|写真))$/iu,
     next: /^(?:›|→|❯|>|(?:(?:show|go to(?: the)?) )?next(?: (?:slide|image|photo))?|次へ|次の(?:スライド|画像|写真))$/iu,
   };
-  const navWords = /paginat|paging|(?:^|[\W_])pager(?:$|[\W_])|ページネーション|ページ送り|ページ移動|page[ -]?(?:nav(?:igation)?|numbers)/i;
+  const navWords =
+    /paginat|paging|(?:^|[\W_])pager(?:$|[\W_])|ページネーション|ページ送り|ページ移動|page[ -]?(?:nav(?:igation)?|numbers)/i;
   const ajaxLoadMoreButton = ".alm-btn-wrap > button.alm-load-more-btn";
   const loadMoreLabels = [
     /^(?:[\p{L}\p{N}][\p{L}\p{N}&'’-]{0,11} )?(?:load|show|see|view) (?:\d+ )?more(?: (?:products?|items?|results?|articles?|posts?|stories|recipes|projects|jobs|events|videos|news|photos?|images?))?$/iu,
@@ -38,8 +44,10 @@ type Decisions = import("./protocol.js").Decisions;
   type Targets = Partial<Record<Direction, HTMLElement>>;
   type Group = { root: Element; controls: HTMLElement[]; current?: Element; currentPage?: number };
   type NumberedAddress = NonNullable<ReturnType<typeof pageAddress>> & { number: number };
-  const paginationSelector = "nav,[role=navigation],[class*=paginat i],[class*=pager i],[class*=pagenav i],[class*=page-nav i],[data-pagination]";
-  const selectedSelector = '.active,.selected,.current,.is-current,[class$="--current"],[class*="--current "],[aria-label^="Current page," i]';
+  const paginationSelector =
+    "nav,[role=navigation],[class*=paginat i],[class*=pager i],[class*=pagenav i],[class*=page-nav i],[data-pagination]";
+  const selectedSelector =
+    '.active,.selected,.current,.is-current,[class$="--current"],[class*="--current "],[aria-label^="Current page," i]';
   const currentSelector = "[aria-current=page],[aria-current=true]";
   const pageParameter = /^(?:p|page|paged|pageno|pagenum|pagenumber|pg|start(?:_index|row)?|offset|skip|bsi)$/i;
   const pagePath = /\/(?:page[\/=-]?|p)\d+(?:\.html)?\/?$/i;
@@ -58,7 +66,7 @@ type Decisions = import("./protocol.js").Decisions;
   let inspectedRoots: Element[] = [];
   const fingerprints = new WeakMap<HTMLElement, string>();
   type LoadMore = { control: HTMLElement; list: Element; itemCount: number; page?: ReturnType<typeof pageAddress> };
-  let pendingLoadMore: Omit<LoadMore, "control"> & { address: string; retryAt: number } | undefined;
+  let pendingLoadMore: (Omit<LoadMore, "control"> & { address: string; retryAt: number }) | undefined;
   let carouselPointer: { carousel: Element; x: number; y: number } | undefined;
 
   function safeDestination(raw: string): string | undefined {
@@ -74,33 +82,47 @@ type Decisions = import("./protocol.js").Decisions;
 
   function availableControl(node: Element): node is HTMLElement {
     if (!(node instanceof HTMLElement) || !node.isConnected || !node.getClientRects().length) return false;
-    return !node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled,[aria-busy=true]") &&
-      getComputedStyle(node).visibility === "visible";
+    return (
+      !node.closest("[inert],[hidden],[aria-hidden=true],:disabled,[aria-disabled=true],.disabled,[aria-busy=true]") &&
+      getComputedStyle(node).visibility === "visible"
+    );
   }
 
   function usable(node: Element): node is HTMLElement {
     if (node.closest(nonPagination + ",form[method=dialog]") || !availableControl(node)) return false;
     if (node instanceof HTMLAnchorElement) {
-      if (node.hasAttribute("download") || (node.target && node.target !== "_self") || !safeDestination(node.href)) return false;
+      if (node.hasAttribute("download") || (node.target && node.target !== "_self") || !safeDestination(node.href))
+        return false;
       if (!node.closest("form") || pageAddress(new URL(node.href))) return true;
       const direction = directionOf(node);
       return direction !== "unknown" && adjacentAddress(node.href, direction);
     }
-    return node.matches(buttonSelector) && !node.closest("a,form") &&
-      (!(node instanceof HTMLButtonElement) || !node.form);
+    return (
+      node.matches(buttonSelector) && !node.closest("a,form") && (!(node instanceof HTMLButtonElement) || !node.form)
+    );
   }
 
   function label(node: Element) {
-    return [node.getAttribute("aria-label"), node.getAttribute("title"), node.textContent,
-      ...[...node.children].filter(child => !child.matches("[aria-hidden=true],svg")).map(child => child.textContent)]
-      .filter((value): value is string => Boolean(value)).map(value => value.trim().replace(/\s+/g, " "));
+    return [
+      node.getAttribute("aria-label"),
+      node.getAttribute("title"),
+      node.textContent,
+      ...[...node.children]
+        .filter((child) => !child.matches("[aria-hidden=true],svg"))
+        .map((child) => child.textContent),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.trim().replace(/\s+/g, " "));
   }
 
   function accessibleName(node: Element) {
     const labelledby = node.getAttribute("aria-labelledby");
     if (labelledby) {
-      const text = labelledby.split(/\s+/)
-        .map(id => node.ownerDocument?.getElementById(id)?.textContent ?? "").join(" ").trim();
+      const text = labelledby
+        .split(/\s+/)
+        .map((id) => node.ownerDocument?.getElementById(id)?.textContent ?? "")
+        .join(" ")
+        .trim();
       if (text) return text;
     }
     const ariaLabel = node.getAttribute("aria-label")?.trim();
@@ -112,11 +134,16 @@ type Decisions = import("./protocol.js").Decisions;
 
   function isLoadMoreLabel(node: Element) {
     const text = loadMoreText(accessibleName(node));
-    return text !== "" && loadMoreLabels.some(pattern => pattern.test(text));
+    return text !== "" && loadMoreLabels.some((pattern) => pattern.test(text));
   }
 
   function loadMoreText(value: string) {
-    return value.normalize("NFKC").replace(/\p{Cf}/gu, "").replace(/\s*[+→›»]\s*$/, "").trim().replace(/\s+/g, " ");
+    return value
+      .normalize("NFKC")
+      .replace(/\p{Cf}/gu, "")
+      .replace(/\s*[+→›»]\s*$/, "")
+      .trim()
+      .replace(/\s+/g, " ");
   }
 
   function directionOf(node: Element): Direction | "unknown" {
@@ -124,14 +151,15 @@ type Decisions = import("./protocol.js").Decisions;
     if (rel.includes("prev") || rel.includes("previous")) return "previous";
     if (rel.includes("next")) return "next";
     const values = label(node);
-    if (values.some(value => /^(?:first|last)(?: page)?$|^cannot go to\b/i.test(value))) return "unknown";
+    if (values.some((value) => /^(?:first|last)(?: page)?$|^cannot go to\b/i.test(value))) return "unknown";
     for (const value of values) {
-      const text = value.replace(/^[<‹«←❮]\s*(?=\p{L})/u, "")
+      const text = value
+        .replace(/^[<‹«←❮]\s*(?=\p{L})/u, "")
         .replace(/^(?:go to|goto|navigate to) (?:the )?/i, "")
         .replace(/(?: of (?:search )?results\.?|\s*[<>›‹»«→←])$/i, "")
         .replace(/^(next|previous|prev) page \d+$/i, "$1 page")
         .replace(/\.$/, "");
-      const direction = directions.find(direction => labels[direction].test(text) || labels[direction].test(value));
+      const direction = directions.find((direction) => labels[direction].test(text) || labels[direction].test(value));
       if (direction) return direction;
     }
     return "unknown";
@@ -139,30 +167,42 @@ type Decisions = import("./protocol.js").Decisions;
 
   function numberOf(node: Element): number | undefined {
     const text = node.textContent?.normalize("NFKC").trim() ?? "";
-    const number = text.match(/^(\d{1,6})(?:\s*\(current\))?$/i)?.[1] ??
+    const number =
+      text.match(/^(\d{1,6})(?:\s*\(current\))?$/i)?.[1] ??
       (node.getAttribute("aria-current") === "page" ? text.match(/^(\d{1,6})\s*[/／]\s*[\d,.]+$/)?.[1] : undefined) ??
       node.getAttribute("aria-label")?.match(/^(?:(?:go to|goto) )?page (\d{1,6})(?:,? current page)?$/i)?.[1];
     return number === undefined ? undefined : Number(number);
   }
 
   function currentControl(root: Element, controls: Element[]) {
-    const matches = (elements: Iterable<Element>) => [...elements].filter(node => numberOf(node) !== undefined);
+    const matches = (elements: Iterable<Element>) => [...elements].filter((node) => numberOf(node) !== undefined);
     const selected = matches(root.querySelectorAll(selectedSelector));
     const marked = matches(root.querySelectorAll(currentSelector));
     const url = new URL(location.href);
     const samePage = (node: Element) => {
       if (!(node instanceof HTMLAnchorElement) || !node.hasAttribute("href")) return false;
       const destination = new URL(node.href);
-      return destination.origin === url.origin && destination.pathname === url.pathname && destination.search === url.search;
+      return (
+        destination.origin === url.origin && destination.pathname === url.pathname && destination.search === url.search
+      );
     };
-    const numberLists = new Set(controls.filter(node => numberOf(node) !== undefined).map(node => node.parentElement));
-    const bareNumbers = [...numberLists].flatMap(list => [...(list?.children ?? [])].filter(node =>
-      !node.matches(controlSelector) && !node.querySelector(controlSelector) && numberOf(node) !== undefined,
-    ));
-    return selected.find(samePage) ?? (selected.length === 1 ? selected[0] : undefined) ??
-      marked.find(samePage) ?? (marked.length === 1 ? marked[0] : undefined) ??
-      controls.find(node => numberOf(node) !== undefined && samePage(node)) ??
-      (bareNumbers.length === 1 ? bareNumbers[0] : undefined);
+    const numberLists = new Set(
+      controls.filter((node) => numberOf(node) !== undefined).map((node) => node.parentElement),
+    );
+    const bareNumbers = [...numberLists].flatMap((list) =>
+      [...(list?.children ?? [])].filter(
+        (node) =>
+          !node.matches(controlSelector) && !node.querySelector(controlSelector) && numberOf(node) !== undefined,
+      ),
+    );
+    return (
+      selected.find(samePage) ??
+      (selected.length === 1 ? selected[0] : undefined) ??
+      marked.find(samePage) ??
+      (marked.length === 1 ? marked[0] : undefined) ??
+      controls.find((node) => numberOf(node) !== undefined && samePage(node)) ??
+      (bareNumbers.length === 1 ? bareNumbers[0] : undefined)
+    );
   }
 
   function pageAddress(url: URL) {
@@ -175,9 +215,11 @@ type Decisions = import("./protocol.js").Decisions;
       return JSON.stringify([path, pageKey, parameters.toString()]);
     };
     const segment = url.pathname.match(pagePath)?.[0];
-    if (segment) return { route: route(url.pathname.slice(0, -segment.length), ""), value: Number(segment.match(/\d+/)?.[0]) };
+    if (segment)
+      return { route: route(url.pathname.slice(0, -segment.length), ""), value: Number(segment.match(/\d+/)?.[0]) };
     for (const [key, value] of url.searchParams) {
-      if (pageParameter.test(key) && /^\d{1,8}$/.test(value)) return { route: route(url.pathname, key), value: Number(value) };
+      if (pageParameter.test(key) && /^\d{1,8}$/.test(value))
+        return { route: route(url.pathname, key), value: Number(value) };
     }
   }
 
@@ -188,7 +230,8 @@ type Decisions = import("./protocol.js").Decisions;
 
   function pageSegmentBase(url: URL, page: number) {
     const segment = url.pathname.match(pagePath)?.[0];
-    if (segment && Number(segment.match(/\d+/)?.[0]) === page) return url.pathname.slice(0, -segment.length).replace(/\/$/, "");
+    if (segment && Number(segment.match(/\d+/)?.[0]) === page)
+      return url.pathname.slice(0, -segment.length).replace(/\/$/, "");
   }
 
   function listBase(url: URL, page: number) {
@@ -198,17 +241,27 @@ type Decisions = import("./protocol.js").Decisions;
 
   function belowList(pathname: string, base: string) {
     const path = pathname.replace(/\/$/, "");
-    return Boolean(base) && path.startsWith(base + "/") &&
-      !pagePath.test(path.slice(base.length)) && !numberedPath.test(path.slice(base.length));
+    return (
+      Boolean(base) &&
+      path.startsWith(base + "/") &&
+      !pagePath.test(path.slice(base.length)) &&
+      !numberedPath.test(path.slice(base.length))
+    );
   }
 
   function numberedPageStep(pages: NumberedAddress[]) {
     const first = pages[0];
-    const second = first && pages.find(page => page.number !== first.number);
+    const second = first && pages.find((page) => page.number !== first.number);
     if (!first || !second) return;
     const step = (second.value - first.value) / (second.number - first.number);
-    if (Number.isInteger(step) && step > 0 && pages.every(page =>
-      page.route === first.route && page.value - first.value === (page.number - first.number) * step)) return step;
+    if (
+      Number.isInteger(step) &&
+      step > 0 &&
+      pages.every(
+        (page) => page.route === first.route && page.value - first.value === (page.number - first.number) * step,
+      )
+    )
+      return step;
   }
 
   function pageFromNumberedLinks(controls: HTMLElement[], url: URL) {
@@ -226,9 +279,13 @@ type Decisions = import("./protocol.js").Decisions;
     if (step === undefined) return;
     const first = pages[0];
     const number = first.number + (current.value - first.value) / step;
-    if (Number.isInteger(number) && number >= 1 &&
-        pages.some(page => page.number === number - 1) &&
-        pages.some(page => page.number === number + 1)) return number;
+    if (
+      Number.isInteger(number) &&
+      number >= 1 &&
+      pages.some((page) => page.number === number - 1) &&
+      pages.some((page) => page.number === number + 1)
+    )
+      return number;
   }
 
   function inferredPage(controls: HTMLElement[], current: URL) {
@@ -249,9 +306,14 @@ type Decisions = import("./protocol.js").Decisions;
     }
     const previous = pages.get(currentPage - 1);
     const next = pages.get(currentPage + 1);
-    if (!previous || !next || (!rel(previous).includes("prev") && !rel(previous).includes("previous")) ||
-        !rel(next).includes("next")) return;
-    return [...pages.keys()].some(page => page !== currentPage && Math.abs(page - currentPage) > 1)
+    if (
+      !previous ||
+      !next ||
+      (!rel(previous).includes("prev") && !rel(previous).includes("previous")) ||
+      !rel(next).includes("next")
+    )
+      return;
+    return [...pages.keys()].some((page) => page !== currentPage && Math.abs(page - currentPage) > 1)
       ? currentPage
       : undefined;
   }
@@ -260,8 +322,10 @@ type Decisions = import("./protocol.js").Decisions;
     const current = new URL(location.href);
     const suffix = current.pathname.match(numberedPath);
     const page = suffix ? Number(suffix[1]) : currentPage;
-    const base = page === undefined ? undefined : numberedPathBase(current, page) ??
-      (page === 1 ? current.pathname.replace(/\/$/, "") : undefined);
+    const base =
+      page === undefined
+        ? undefined
+        : (numberedPathBase(current, page) ?? (page === 1 ? current.pathname.replace(/\/$/, "") : undefined));
     const routes = new Map<string, Set<number>>();
     for (const control of controls) {
       if (!(control instanceof HTMLAnchorElement) || !usable(control)) continue;
@@ -275,13 +339,18 @@ type Decisions = import("./protocol.js").Decisions;
         continue;
       }
       const value = numberOf(control);
-      if (value === undefined || base === undefined || url.search !== current.search ||
-          numberedPathBase(url, value) !== base) continue;
+      if (
+        value === undefined ||
+        base === undefined ||
+        url.search !== current.search ||
+        numberedPathBase(url, value) !== base
+      )
+        continue;
       const values = routes.get(base) ?? new Set<number>();
       values.add(value);
       routes.set(base, values);
     }
-    return [...routes.values()].some(values => values.size >= 2);
+    return [...routes.values()].some((values) => values.size >= 2);
   }
 
   function pageDirection(control: HTMLElement, group: Group | undefined) {
@@ -293,10 +362,14 @@ type Decisions = import("./protocol.js").Decisions;
     if (page === undefined || group.currentPage === undefined) return;
     const url = new URL(control.href);
     const current = new URL(location.href);
-    const currentBase = listBase(current, group.currentPage) ??
+    const currentBase =
+      listBase(current, group.currentPage) ??
       (group.currentPage === 1 ? current.pathname.replace(/\/$/, "") : undefined);
     const rel = control.getAttribute("rel")?.toLowerCase().split(/\s+/) ?? [];
-    const alias = page === 1 && group.currentPage === 2 && url.search === current.search &&
+    const alias =
+      page === 1 &&
+      group.currentPage === 2 &&
+      url.search === current.search &&
       (rel.includes("prev") || rel.includes("previous")) &&
       url.pathname.replace(/\/$/, "") === currentBase;
     const base = listBase(url, page) ?? (alias ? currentBase : undefined);
@@ -315,8 +388,7 @@ type Decisions = import("./protocol.js").Decisions;
     if (!group) return false;
     const page = numberOf(target);
     if (page !== undefined) {
-      return group.currentPage !== undefined &&
-        page === group.currentPage + (direction === "next" ? 1 : -1);
+      return group.currentPage !== undefined && page === group.currentPage + (direction === "next" ? 1 : -1);
     }
     return directionOf(target) === direction;
   }
@@ -329,14 +401,21 @@ type Decisions = import("./protocol.js").Decisions;
       if (pageParameter.test(key) || trackingParameter.test(key)) filters.delete(key);
     }
     filters.sort();
-    const structure = controls.map(control => {
+    const structure = controls.map((control) => {
       const destination = control instanceof HTMLAnchorElement ? new URL(control.href) : undefined;
       const address = destination && pageAddress(destination);
       const page = numberOf(control);
       const numericPath = destination && page !== undefined && numberedPathBase(destination, page);
       return [
-        control.tagName, control.className, control.getAttribute("role"), control.getAttribute("type"),
-        page === undefined ? label(control).slice(0, 4).map(value => value.slice(0, 120)) : "#",
+        control.tagName,
+        control.className,
+        control.getAttribute("role"),
+        control.getAttribute("type"),
+        page === undefined
+          ? label(control)
+              .slice(0, 4)
+              .map((value) => value.slice(0, 120))
+          : "#",
         control.querySelector("svg")?.innerHTML.slice(0, 512),
         address?.route ?? (numericPath || destination?.pathname),
       ];
@@ -358,7 +437,11 @@ type Decisions = import("./protocol.js").Decisions;
       const page = numberOf(control ?? child);
       if (page === undefined) {
         if (control && directionOf(control) === "unknown") {
-          if (!/^(?:\.{3}|…)$/.test(control.textContent?.trim() ?? "") && !label(control).some(value => /^(?:first|last)(?: page)?$/i.test(value))) return;
+          if (
+            !/^(?:\.{3}|…)$/.test(control.textContent?.trim() ?? "") &&
+            !label(control).some((value) => /^(?:first|last)(?: page)?$/i.test(value))
+          )
+            return;
         } else if (!control && !/^(?:\.{3}|…)?$/.test(child.textContent?.trim() ?? "")) return;
         continue;
       }
@@ -388,36 +471,58 @@ type Decisions = import("./protocol.js").Decisions;
       if (numberedPageStep(pages) === undefined) return;
     } else {
       const currentURL = new URL(location.href);
-      const base = currentPage === 1 ? currentURL.pathname.replace(/\/$/, "") : numberedPathBase(currentURL, currentPage);
-      if (base === undefined || pathPages.length < 2 || !pathPages.every(page =>
-        page.base === base && new URL(page.control.href).search === currentURL.search)) return;
-      const hasDirectionalLink = pathPages.some(({ control, number }) =>
-        Math.abs(number - currentPage) === 1 && controls.some(link => link instanceof HTMLAnchorElement &&
-          link.href === control.href && directionOf(link) === (number > currentPage ? "next" : "previous")));
+      const base =
+        currentPage === 1 ? currentURL.pathname.replace(/\/$/, "") : numberedPathBase(currentURL, currentPage);
+      if (
+        base === undefined ||
+        pathPages.length < 2 ||
+        !pathPages.every((page) => page.base === base && new URL(page.control.href).search === currentURL.search)
+      )
+        return;
+      const hasDirectionalLink = pathPages.some(
+        ({ control, number }) =>
+          Math.abs(number - currentPage) === 1 &&
+          controls.some(
+            (link) =>
+              link instanceof HTMLAnchorElement &&
+              link.href === control.href &&
+              directionOf(link) === (number > currentPage ? "next" : "previous"),
+          ),
+      );
       if (!hasDirectionalLink) return;
     }
     return { root, controls, current, currentPage };
   }
 
   function paginationGroups() {
-    const roots = new Set<Element>([...document.querySelectorAll(paginationSelector)].filter(node =>
-      navWords.test(node.getAttribute("aria-label") ?? "") || navWords.test(node.getAttribute("class") ?? "") || node.hasAttribute("data-pagination"),
-    ));
+    const roots = new Set<Element>(
+      [...document.querySelectorAll(paginationSelector)].filter(
+        (node) =>
+          navWords.test(node.getAttribute("aria-label") ?? "") ||
+          navWords.test(node.getAttribute("class") ?? "") ||
+          node.hasAttribute("data-pagination"),
+      ),
+    );
     for (const current of document.querySelectorAll(currentSelector)) {
       if (numberOf(current) === undefined) continue;
       const group = current.closest("ul,ol,nav,[role=navigation]");
-      if (group && ![...roots].some(root => root.contains(group))) roots.add(group);
+      if (group && ![...roots].some((root) => root.contains(group))) roots.add(group);
     }
-    const groups: Group[] = [...roots].filter(root => !root.closest(nonPagination) &&
-      ![...roots].some(other => other !== root && other.contains(root))).flatMap(root => {
-      const controls = [...root.querySelectorAll<HTMLElement>(controlSelector)];
-      const current = currentControl(root, controls);
-      const url = new URL(location.href);
-      const currentPage = current ? numberOf(current) : inferredPage(controls, url) ?? pageFromNumberedLinks(controls, url);
-      return controls.length && (currentPage !== undefined || routeEvidence(controls, currentPage))
-        ? [{ root, controls, current, currentPage }]
-        : [];
-    });
+    const groups: Group[] = [...roots]
+      .filter(
+        (root) => !root.closest(nonPagination) && ![...roots].some((other) => other !== root && other.contains(root)),
+      )
+      .flatMap((root) => {
+        const controls = [...root.querySelectorAll<HTMLElement>(controlSelector)];
+        const current = currentControl(root, controls);
+        const url = new URL(location.href);
+        const currentPage = current
+          ? numberOf(current)
+          : (inferredPage(controls, url) ?? pageFromNumberedLinks(controls, url));
+        return controls.length && (currentPage !== undefined || routeEvidence(controls, currentPage))
+          ? [{ root, controls, current, currentPage }]
+          : [];
+      });
     const seen = new Set<Element>();
     for (const anchor of document.querySelectorAll<HTMLAnchorElement>("a[href]")) {
       const page = numberOf(anchor);
@@ -426,18 +531,25 @@ type Decisions = import("./protocol.js").Decisions;
       if (!pageAddress(url) && numberedPathBase(url, page) === undefined) continue;
       let parent = anchor.parentElement;
       for (let depth = 0; depth < 3 && parent; depth++, parent = parent.parentElement) {
-        if (seen.has(parent) || groups.some(group => group.root.contains(parent))) break;
+        if (seen.has(parent) || groups.some((group) => group.root.contains(parent))) break;
         seen.add(parent);
         const group = numberedGroup(parent);
-        if (group) { groups.push(group); break; }
+        if (group) {
+          groups.push(group);
+          break;
+        }
       }
     }
     return groups;
   }
 
   function fingerprint(node: HTMLElement) {
-    return JSON.stringify([node instanceof HTMLAnchorElement ? node.href : null, directionOf(node), numberOf(node),
-      label(node).join("\n").slice(0, 1024)]);
+    return JSON.stringify([
+      node instanceof HTMLAnchorElement ? node.href : null,
+      directionOf(node),
+      numberOf(node),
+      label(node).join("\n").slice(0, 1024),
+    ]);
   }
 
   function addressDirection(href: string, indexAlias = false): Direction | undefined {
@@ -479,8 +591,13 @@ type Decisions = import("./protocol.js").Decisions;
     if (current.origin !== target.origin || current.search !== target.search) return;
     const from = Number(current.pathname.match(numberedPath)?.[1]);
     const to = Number(target.pathname.match(numberedPath)?.[1]);
-    if (from < 1 || to < 1 || Math.abs(to - from) !== 1 ||
-        numberedPathBase(current, from) !== numberedPathBase(target, to)) return;
+    if (
+      from < 1 ||
+      to < 1 ||
+      Math.abs(to - from) !== 1 ||
+      numberedPathBase(current, from) !== numberedPathBase(target, to)
+    )
+      return;
     return to > from ? "next" : "previous";
   }
 
@@ -496,22 +613,27 @@ type Decisions = import("./protocol.js").Decisions;
       if (entry === end) break;
       if (entry.matches("nav,aside,header,footer,[hidden],[aria-hidden=true]")) continue;
       const link = entry.matches("a[href]") ? entry : entry.querySelector("a[href]");
-      if (!(link instanceof HTMLAnchorElement) || !safeDestination(link.href) || adjacentAddress(link.href, "next") ||
-          adjacentAddress(link.href, "previous")) continue;
+      if (
+        !(link instanceof HTMLAnchorElement) ||
+        !safeDestination(link.href) ||
+        adjacentAddress(link.href, "next") ||
+        adjacentAddress(link.href, "previous")
+      )
+        continue;
       const destination = new URL(link.href);
       const entries = destinationsByTag.get(entry.tagName) ?? new Set<string>();
       entries.add(destination.pathname + destination.search);
       destinationsByTag.set(entry.tagName, entries);
     }
-    return Math.max(0, ...[...destinationsByTag.values()].map(entries => entries.size));
+    return Math.max(0, ...[...destinationsByTag.values()].map((entries) => entries.size));
   }
 
   function ajaxLoadMoreListing(control: Element): Pick<LoadMore, "list" | "itemCount"> | undefined {
     if (!control.matches(ajaxLoadMoreButton)) return;
     const container = control.closest(".ajax-load-more-wrap");
     if (!container) return;
-    const lists = [...container.querySelectorAll(".alm-listing.alm-ajax")].filter(list =>
-      list.closest(".ajax-load-more-wrap") === container,
+    const lists = [...container.querySelectorAll(".alm-listing.alm-ajax")].filter(
+      (list) => list.closest(".ajax-load-more-wrap") === container,
     );
     if (lists.length === 1) {
       const list = lists[0];
@@ -521,10 +643,14 @@ type Decisions = import("./protocol.js").Decisions;
 
   function declaresManualLoadMore(control: Element, list: Element | undefined) {
     if (list?.getAttribute("data-scroll") !== "false" || directionOf(control) === "previous") return false;
-    const configured = (name: string) => loadMoreText((list.getAttribute(name) ?? "").replace(/<[^>]+>/g, "")).toLowerCase();
+    const configured = (name: string) =>
+      loadMoreText((list.getAttribute(name) ?? "").replace(/<[^>]+>/g, "")).toLowerCase();
     const expected = configured("data-button-label");
-    return Boolean(expected && expected !== configured("data-prev-button-label") &&
-      loadMoreText(accessibleName(control)).toLowerCase() === expected);
+    return Boolean(
+      expected &&
+      expected !== configured("data-prev-button-label") &&
+      loadMoreText(accessibleName(control)).toLowerCase() === expected,
+    );
   }
 
   function wooCommerceListing(control: HTMLElement): Pick<LoadMore, "list" | "itemCount"> | undefined {
@@ -549,7 +675,8 @@ type Decisions = import("./protocol.js").Decisions;
     }
 
     function check(list: Element, depth: number): Pick<LoadMore, "list" | "itemCount"> | undefined {
-      if (list.matches("nav,aside,[role=navigation],details,progress,[role=status],[aria-hidden=true],[hidden]")) return;
+      if (list.matches("nav,aside,[role=navigation],details,progress,[role=status],[aria-hidden=true],[hidden]"))
+        return;
       if (!endsNearControl(list)) return;
       const itemCount = listingSize(list);
       if (itemCount >= 3) return { list, itemCount };
@@ -571,11 +698,17 @@ type Decisions = import("./protocol.js").Decisions;
       const second = last?.previousElementSibling;
       const third = second?.previousElementSibling;
       const parent = region.parentElement;
-      if (last && second && third && parent && endsNearControl(last) &&
-          last.tagName === second.tagName && last.tagName === third.tagName &&
-          (last.matches("article,li,[role=listitem]") || [...last.classList].some(name =>
-            second.classList.contains(name) && third.classList.contains(name),
-          ))) {
+      if (
+        last &&
+        second &&
+        third &&
+        parent &&
+        endsNearControl(last) &&
+        last.tagName === second.tagName &&
+        last.tagName === third.tagName &&
+        (last.matches("article,li,[role=listitem]") ||
+          [...last.classList].some((name) => second.classList.contains(name) && third.classList.contains(name)))
+      ) {
         const itemCount = listingSize(parent, region);
         if (itemCount >= 3) return { list: parent, itemCount };
       }
@@ -584,10 +717,12 @@ type Decisions = import("./protocol.js").Decisions;
   }
 
   function styledControl(node: Element): node is HTMLElement {
-    if (!(node instanceof HTMLElement) || node.matches(controlSelector) || !/^(?:p|div|span|li)$/i.test(node.tagName)) return false;
-    if (!isLoadMoreLabel(node) || getComputedStyle(node).cursor !== "pointer" || !node.getClientRects().length) return false;
+    if (!(node instanceof HTMLElement) || node.matches(controlSelector) || !/^(?:p|div|span|li)$/i.test(node.tagName))
+      return false;
+    if (!isLoadMoreLabel(node) || getComputedStyle(node).cursor !== "pointer" || !node.getClientRects().length)
+      return false;
     if (node.closest("a,form," + nonPagination)) return false;
-    return ![...node.querySelectorAll(controlSelector)].some(child => child.getClientRects().length);
+    return ![...node.querySelectorAll(controlSelector)].some((child) => child.getClientRects().length);
   }
 
   function loadMoreAtEnd(): LoadMore | undefined {
@@ -602,9 +737,12 @@ type Decisions = import("./protocol.js").Decisions;
       if (control instanceof HTMLAnchorElement) {
         if (!page || !adjacentAddress(control.href, "next")) continue;
       } else if (!isLoadMoreLabel(control) && !declaresManualLoadMore(control, ajaxListing?.list)) continue;
-      if ((!styled && !usable(control)) ||
-          control.closest("aside,details,form,header,footer,.ajax-load-more-wrap.alm-loading") ||
-          control.matches("[aria-expanded],[aria-haspopup],.alm-load-more-btn:is(.loading,.done)")) continue;
+      if (
+        (!styled && !usable(control)) ||
+        control.closest("aside,details,form,header,footer,.ajax-load-more-wrap.alm-loading") ||
+        control.matches("[aria-expanded],[aria-haspopup],.alm-load-more-btn:is(.loading,.done)")
+      )
+        continue;
       const { left, top, width, height } = control.getBoundingClientRect();
       const underPointer = document.elementFromPoint(left + width / 2, top + height / 2);
       if (!underPointer || !control.contains(underPointer)) continue;
@@ -625,9 +763,15 @@ type Decisions = import("./protocol.js").Decisions;
       found = { control, ...listing, page };
     }
     if (!found) return;
-    if (pendingLoadMore && (pendingLoadMore.list === found.list || pendingLoadMore.address === location.href ||
+    if (
+      pendingLoadMore &&
+      (pendingLoadMore.list === found.list ||
+        pendingLoadMore.address === location.href ||
         addressDirection(pendingLoadMore.address) !== undefined) &&
-        pendingLoadMore.itemCount >= found.itemCount && performance.now() < pendingLoadMore.retryAt) return;
+      pendingLoadMore.itemCount >= found.itemCount &&
+      performance.now() < pendingLoadMore.retryAt
+    )
+      return;
     return found;
   }
 
@@ -637,8 +781,10 @@ type Decisions = import("./protocol.js").Decisions;
     for (const counter of document.querySelectorAll<HTMLElement>("[role=button]")) {
       const text = (counter.textContent ?? "").replace(/\s+/g, " ").trim();
       if (!gmailRange.test(text) || counter.querySelector("[role=button]")) continue;
-      const siblings = [...(counter.parentElement?.children ?? [])].filter((sibling): sibling is HTMLElement =>
-        sibling !== counter && sibling instanceof HTMLElement && sibling.matches("[role=button]"));
+      const siblings = [...(counter.parentElement?.children ?? [])].filter(
+        (sibling): sibling is HTMLElement =>
+          sibling !== counter && sibling instanceof HTMLElement && sibling.matches("[role=button]"),
+      );
       if (siblings.length !== 2) continue;
       pagers.push({
         previous: availableControl(siblings[0]) ? siblings[0] : undefined,
@@ -653,8 +799,7 @@ type Decisions = import("./protocol.js").Decisions;
 
   function gmailClick(target: HTMLElement) {
     const { left, top, width, height } = target.getBoundingClientRect();
-    const init = { bubbles: true, cancelable: true, button: 0,
-      clientX: left + width / 2, clientY: top + height / 2 };
+    const init = { bubbles: true, cancelable: true, button: 0, clientX: left + width / 2, clientY: top + height / 2 };
     for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
       target.dispatchEvent(new window.PointerEvent(type, init));
     }
@@ -670,15 +815,21 @@ type Decisions = import("./protocol.js").Decisions;
     }
     if (destinations.size !== 1) return;
     const href = destinations.values().next().value;
-    const links = anchors.filter(anchor =>
-      anchor.href === href && usable(anchor) && !isLoadMoreLabel(anchor),
-    );
+    const links = anchors.filter((anchor) => anchor.href === href && usable(anchor) && !isLoadMoreLabel(anchor));
     const opposite = direction === "next" ? "previous" : "next";
-    return links.find(anchor => directionOf(anchor) === direction) ??
-      links.find(anchor => groups.some(group => group.currentPage !== undefined && group.root.contains(anchor) &&
-        numberOf(anchor) === group.currentPage + (direction === "next" ? 1 : -1))) ??
-      links.find(anchor => directionOf(anchor) === "unknown") ??
-      links.find(anchor => !hasDirectionalRel(anchor, opposite));
+    return (
+      links.find((anchor) => directionOf(anchor) === direction) ??
+      links.find((anchor) =>
+        groups.some(
+          (group) =>
+            group.currentPage !== undefined &&
+            group.root.contains(anchor) &&
+            numberOf(anchor) === group.currentPage + (direction === "next" ? 1 : -1),
+        ),
+      ) ??
+      links.find((anchor) => directionOf(anchor) === "unknown") ??
+      links.find((anchor) => !hasDirectionalRel(anchor, opposite))
+    );
   }
 
   function destinationKey(control: HTMLElement) {
@@ -690,14 +841,20 @@ type Decisions = import("./protocol.js").Decisions;
 
   function inspect() {
     const groups = paginationGroups();
-    inspectedRoots = groups.map(group => group.root);
+    inspectedRoots = groups.map((group) => group.root);
     const anchors = [...document.querySelectorAll<HTMLAnchorElement>("a[href]")];
     const numberedNeighbors: Record<Direction, HTMLAnchorElement[]> = { previous: [], next: [] };
     for (const anchor of anchors) {
       if (!anchor.hasAttribute("rel")) continue;
-      const rel = directions.filter(direction => hasDirectionalRel(anchor, direction));
-      if (rel.length !== 1 || adjacentNumberedPath(anchor.href) !== rel[0] ||
-          anchor.closest("article,aside,header,footer,form") || !usable(anchor) || isLoadMoreLabel(anchor)) continue;
+      const rel = directions.filter((direction) => hasDirectionalRel(anchor, direction));
+      if (
+        rel.length !== 1 ||
+        adjacentNumberedPath(anchor.href) !== rel[0] ||
+        anchor.closest("article,aside,header,footer,form") ||
+        !usable(anchor) ||
+        isLoadMoreLabel(anchor)
+      )
+        continue;
       numberedNeighbors[rel[0]].push(anchor);
     }
 
@@ -712,21 +869,32 @@ type Decisions = import("./protocol.js").Decisions;
       for (const group of groups) {
         const { controls, current, currentPage } = group;
         const adjacent = currentPage === undefined ? undefined : currentPage + (direction === "next" ? 1 : -1);
-        const available = controls.filter(usable).filter(control =>
-          !current?.contains(control) && !isLoadMoreLabel(control) && !control.matches(ajaxLoadMoreButton) && automatic(group, control) &&
-          (!(control instanceof HTMLAnchorElement) || pageDirection(control, group) === direction),
+        const available = controls
+          .filter(usable)
+          .filter(
+            (control) =>
+              !current?.contains(control) &&
+              !isLoadMoreLabel(control) &&
+              !control.matches(ajaxLoadMoreButton) &&
+              automatic(group, control) &&
+              (!(control instanceof HTMLAnchorElement) || pageDirection(control, group) === direction),
+          );
+        const named = available.filter((control) => directionOf(control) === direction);
+        const adjacentControls = available.filter(
+          (control) => adjacent !== undefined && numberOf(control) === adjacent,
         );
-        const named = available.filter(control => directionOf(control) === direction);
-        const adjacentControls = available.filter(control => adjacent !== undefined && numberOf(control) === adjacent);
         const adjacentKeys = new Set(adjacentControls.map(destinationKey));
-        const matchingNamed = adjacentControls.length ? named.filter(control => adjacentKeys.has(destinationKey(control))) : named;
+        const matchingNamed = adjacentControls.length
+          ? named.filter((control) => adjacentKeys.has(destinationKey(control)))
+          : named;
         for (const control of matchingNamed.length ? matchingNamed : adjacentControls) {
           candidates.set(destinationKey(control), control);
         }
       }
       if (candidates.size > 1) {
-        const exactList = [...candidates].filter(([, control]) =>
-          control instanceof HTMLAnchorElement && adjacentAddress(control.href, direction));
+        const exactList = [...candidates].filter(
+          ([, control]) => control instanceof HTMLAnchorElement && adjacentAddress(control.href, direction),
+        );
         if (exactList.length === 1) {
           candidates.clear();
           candidates.set(...exactList[0]);
@@ -736,7 +904,7 @@ type Decisions = import("./protocol.js").Decisions;
         for (const node of anchors) {
           if (directionOf(node) !== direction || !usable(node) || isLoadMoreLabel(node)) continue;
           const explicit = hasDirectionalRel(node, direction);
-          const named = label(node).some(value => /\p{L}/u.test(value));
+          const named = label(node).some((value) => /\p{L}/u.test(value));
           if ((explicit || named) && adjacentAddress(node.href, direction)) candidates.set(destinationKey(node), node);
         }
       }
@@ -762,19 +930,35 @@ type Decisions = import("./protocol.js").Decisions;
       const { controls, current, currentPage } = group;
       const resolvedDestinations = new Set(Object.values(solid).map(destinationKey));
       for (const [position, target] of controls.entries()) {
-        if (!usable(target) || isLoadMoreLabel(target) || target.matches(ajaxLoadMoreButton) ||
-            current?.contains(target) || resolvedDestinations.has(destinationKey(target)) ||
-            !automatic(group, target)) continue;
+        if (
+          !usable(target) ||
+          isLoadMoreLabel(target) ||
+          target.matches(ajaxLoadMoreButton) ||
+          current?.contains(target) ||
+          resolvedDestinations.has(destinationKey(target)) ||
+          !automatic(group, target)
+        )
+          continue;
         const targetPage = numberOf(target);
-        const cue = (target instanceof HTMLAnchorElement ? pageDirection(target, group) : undefined) ?? directionOf(target);
+        const cue =
+          (target instanceof HTMLAnchorElement ? pageDirection(target, group) : undefined) ?? directionOf(target);
         const difference = targetPage === undefined || currentPage === undefined ? 0 : targetPage - currentPage;
         if (targetPage !== undefined && Math.abs(difference) !== 1) continue;
-        if (targetPage === undefined && cue === "unknown" &&
-            (position !== 0 && position !== controls.length - 1 || !target.querySelector("svg,[aria-hidden=true]"))) continue;
+        if (
+          targetPage === undefined &&
+          cue === "unknown" &&
+          ((position !== 0 && position !== controls.length - 1) || !target.querySelector("svg,[aria-hidden=true]"))
+        )
+          continue;
         candidates.push({
           target,
-          data: { id: candidates.length + 1, position, relation: difference < 0 ? -1 : difference > 0 ? 1 : 0,
-            kind: target instanceof HTMLAnchorElement ? "link" : "button", cue },
+          data: {
+            id: candidates.length + 1,
+            position,
+            relation: difference < 0 ? -1 : difference > 0 ? 1 : 0,
+            kind: target instanceof HTMLAnchorElement ? "link" : "button",
+            cue,
+          },
         });
       }
     }
@@ -791,8 +975,11 @@ type Decisions = import("./protocol.js").Decisions;
     const found = inspect();
     for (const direction of directions) {
       const previousDecision = assisted[direction];
-      if (previousDecision && (!found.candidates.some(candidate => candidate.target === previousDecision) ||
-          fingerprints.get(previousDecision) !== fingerprint(previousDecision))) {
+      if (
+        previousDecision &&
+        (!found.candidates.some((candidate) => candidate.target === previousDecision) ||
+          fingerprints.get(previousDecision) !== fingerprint(previousDecision))
+      ) {
         if (previousDecision.isConnected && previousDecision.closest("[aria-busy=true]")) continue;
         delete assisted[direction];
       }
@@ -805,25 +992,49 @@ type Decisions = import("./protocol.js").Decisions;
     const found = inspectTargets();
     if (!found) return;
     if (!found.candidates.length || found.candidates.length > 8) return;
-    const needed = directions.filter(direction => !found.solid[direction] && !assisted[direction] &&
-      found.candidates.some(({ data }) =>
-        (data.cue === "unknown" || data.cue === direction) && data.relation !== (direction === "next" ? -1 : 1),
-      ));
+    const needed = directions.filter(
+      (direction) =>
+        !found.solid[direction] &&
+        !assisted[direction] &&
+        found.candidates.some(
+          ({ data }) =>
+            (data.cue === "unknown" || data.cue === direction) && data.relation !== (direction === "next" ? -1 : 1),
+        ),
+    );
     if (!needed.length) return;
-    const data = { needed, hasCurrent: Boolean(found.group?.current), candidates: found.candidates.map(candidate => candidate.data) };
-    const layout = found.group && classificationLayout(found.group.root, found.group.currentPage, found.candidates.map(candidate => candidate.target));
+    const data = {
+      needed,
+      hasCurrent: Boolean(found.group?.current),
+      candidates: found.candidates.map((candidate) => candidate.data),
+    };
+    const layout =
+      found.group &&
+      classificationLayout(
+        found.group.root,
+        found.group.currentPage,
+        found.candidates.map((candidate) => candidate.target),
+      );
     const signature = JSON.stringify([layout, data]);
     if (classificationAttempt?.signature === signature) return;
     const attempt = { signature };
     classificationAttempt = attempt;
     try {
-      const decisions = await chrome.runtime.sendMessage({ type: "classify", data, layout }) as Decisions | undefined;
+      const decisions = (await chrome.runtime.sendMessage({ type: "classify", data, layout })) as Decisions | undefined;
       if (!enabled || address !== location.href || classificationAttempt !== attempt || !decisions) return;
       const fresh = inspect();
-      if (JSON.stringify(fresh.candidates.map(candidate => candidate.data)) !== JSON.stringify(data.candidates)) return;
-      if (fresh.group && classificationLayout(fresh.group.root, fresh.group.currentPage, fresh.candidates.map(candidate => candidate.target)) !== layout) return;
+      if (JSON.stringify(fresh.candidates.map((candidate) => candidate.data)) !== JSON.stringify(data.candidates))
+        return;
+      if (
+        fresh.group &&
+        classificationLayout(
+          fresh.group.root,
+          fresh.group.currentPage,
+          fresh.candidates.map((candidate) => candidate.target),
+        ) !== layout
+      )
+        return;
       for (const direction of needed) {
-        const candidate = fresh.candidates.find(candidate => candidate.data.id === decisions[direction]);
+        const candidate = fresh.candidates.find((candidate) => candidate.data.id === decisions[direction]);
         if (!fresh.solid[direction] && candidate && usable(candidate.target)) {
           fingerprints.set(candidate.target, fingerprint(candidate.target));
           assisted[direction] = candidate.target;
@@ -843,17 +1054,25 @@ type Decisions = import("./protocol.js").Decisions;
     }, 100);
   }
 
-  const observer = new MutationObserver(records => {
-    if (records.some(record => {
-      const element = record.target instanceof Element ? record.target : record.target.parentElement;
-      return record.attributeName === "aria-busy" ||
-        element?.closest(paginationSelector + ",a[rel],[aria-current=page]") ||
-        inspectedRoots.some(root => element && root.contains(element)) ||
-        [...record.addedNodes, ...record.removedNodes].some(node => node instanceof Element &&
-          (node.matches(paginationSelector) || node.querySelector(paginationSelector) ||
-            node.matches('a[href],li,td') && numberOf(node) !== undefined ||
-            node.querySelector('ul a[href],ol a[href],tr a[href]')));
-    })) {
+  const observer = new MutationObserver((records) => {
+    if (
+      records.some((record) => {
+        const element = record.target instanceof Element ? record.target : record.target.parentElement;
+        return (
+          record.attributeName === "aria-busy" ||
+          element?.closest(paginationSelector + ",a[rel],[aria-current=page]") ||
+          inspectedRoots.some((root) => element && root.contains(element)) ||
+          [...record.addedNodes, ...record.removedNodes].some(
+            (node) =>
+              node instanceof Element &&
+              (node.matches(paginationSelector) ||
+                node.querySelector(paginationSelector) ||
+                (node.matches("a[href],li,td") && numberOf(node) !== undefined) ||
+                node.querySelector("ul a[href],ol a[href],tr a[href]")),
+          )
+        );
+      })
+    ) {
       schedule();
     }
   });
@@ -869,7 +1088,7 @@ type Decisions = import("./protocol.js").Decisions;
     }
     let permitted = false;
     try {
-      permitted = await chrome.runtime.sendMessage({ type: "content-status" }) === true;
+      permitted = (await chrome.runtime.sendMessage({ type: "content-status" })) === true;
     } catch {
       permitted = false;
     }
@@ -886,8 +1105,21 @@ type Decisions = import("./protocol.js").Decisions;
   function observePagination() {
     if (!enabled) return;
     observer.observe(document.documentElement, {
-      subtree: true, childList: true, characterData: true, attributes: true,
-      attributeFilter: ["href", "rel", "aria-current", "aria-disabled", "aria-label", "disabled", "class", "hidden", "aria-busy"],
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: [
+        "href",
+        "rel",
+        "aria-current",
+        "aria-disabled",
+        "aria-label",
+        "disabled",
+        "class",
+        "hidden",
+        "aria-busy",
+      ],
     });
     void scan();
   }
@@ -898,7 +1130,7 @@ type Decisions = import("./protocol.js").Decisions;
     if (solid) return solid;
     const target = assisted[direction];
     if (!target || fingerprints.get(target) !== fingerprint(target) || !usable(target)) return;
-    const candidate = fresh.candidates.find(candidate => candidate.target === target);
+    const candidate = fresh.candidates.find((candidate) => candidate.target === target);
     if (!candidate) return;
     if (candidate.data.cue !== "unknown") {
       return activationEvidence(fresh.group, target, direction) ? target : undefined;
@@ -910,30 +1142,49 @@ type Decisions = import("./protocol.js").Decisions;
   function siteUsesArrowKeys(node: EventTarget) {
     if (!(node instanceof Element)) return false;
     if (node.closest(protectedControls)) return true;
-    if (!(node instanceof HTMLElement) || node === document.body || node === document.documentElement ||
-        node.clientWidth === 0 || node.scrollWidth <= node.clientWidth) return false;
+    if (
+      !(node instanceof HTMLElement) ||
+      node === document.body ||
+      node === document.documentElement ||
+      node.clientWidth === 0 ||
+      node.scrollWidth <= node.clientWidth
+    )
+      return false;
     const { overflowX } = getComputedStyle(node);
     return overflowX === "auto" || overflowX === "scroll";
   }
 
   function carouselOwnsShortcut(carousel: Element, key: string) {
     const shortcut = `[aria-keyshortcuts~="${key}" i]`;
-    return carousel.matches(shortcut) || [...carousel.querySelectorAll(shortcut)].some(node => node.closest(carouselRegion) === carousel);
+    return (
+      carousel.matches(shortcut) ||
+      [...carousel.querySelectorAll(shortcut)].some((node) => node.closest(carouselRegion) === carousel)
+    );
   }
 
   function* carouselControls(carousel: Element) {
     for (const button of carousel.querySelectorAll(buttonSelector)) {
-      if (button.closest(carouselRegion) !== carousel ||
-          button.closest('a,form,nav,[role=navigation],[aria-roledescription="slide" i],[aria-roledescription="スライド"],[aria-expanded],' +
-            protectedControls) || button instanceof HTMLButtonElement && button.form) continue;
+      if (
+        button.closest(carouselRegion) !== carousel ||
+        button.closest(
+          'a,form,nav,[role=navigation],[aria-roledescription="slide" i],[aria-roledescription="スライド"],[aria-expanded],' +
+            protectedControls,
+        ) ||
+        (button instanceof HTMLButtonElement && button.form)
+      )
+        continue;
       const [name] = label(button);
-      const direction = name && directions.find(value => slideLabels[value].test(name));
+      const direction = name && directions.find((value) => slideLabels[value].test(name));
       if (direction) yield { button, direction };
     }
   }
 
   function carouselForKey(carousel: Element, key: string) {
-    for (let region: Element | null | undefined = carousel; region; region = region.parentElement?.closest(carouselRegion)) {
+    for (
+      let region: Element | null | undefined = carousel;
+      region;
+      region = region.parentElement?.closest(carouselRegion)
+    ) {
       if (!carouselControls(region).next().done || carouselOwnsShortcut(region, key)) return region;
     }
     return carousel;
@@ -959,7 +1210,8 @@ type Decisions = import("./protocol.js").Decisions;
     let visible: Element | undefined;
     for (const carousel of document.querySelectorAll(carouselRegion)) {
       const { left, top, width, height } = carousel.getBoundingClientRect();
-      if (!width || !height || !carousel.contains(document.elementFromPoint(left + width / 2, top + height / 2))) continue;
+      if (!width || !height || !carousel.contains(document.elementFromPoint(left + width / 2, top + height / 2)))
+        continue;
       if (!carouselHasVisibleControls(carousel)) continue;
       if (visible) return;
       visible = carousel;
@@ -982,9 +1234,15 @@ type Decisions = import("./protocol.js").Decisions;
     if (!focused) return;
     const active = document.activeElement;
     if (active && active !== document.body && active !== focused) return;
-    if (active === focused && !focused.matches(":disabled") && focused.getClientRects().length &&
-        getComputedStyle(focused).visibility === "visible") return;
-    const available = carouselTarget(carousel, direction) ?? carouselTarget(carousel, direction === "next" ? "previous" : "next");
+    if (
+      active === focused &&
+      !focused.matches(":disabled") &&
+      focused.getClientRects().length &&
+      getComputedStyle(focused).visibility === "visible"
+    )
+      return;
+    const available =
+      carouselTarget(carousel, direction) ?? carouselTarget(carousel, direction === "next" ? "previous" : "next");
     available?.focus({ preventScroll: true });
   }
 
@@ -995,26 +1253,48 @@ type Decisions = import("./protocol.js").Decisions;
   });
   window.addEventListener("popstate", schedule);
   (window as Window & { navigation?: EventTarget }).navigation?.addEventListener("currententrychange", schedule);
-  window.addEventListener("pointermove", event => {
-    if (!enabled || !event.isTrusted || event.pointerType !== "mouse" || (!event.movementX && !event.movementY)) return;
-    const carousel = event.buttons === 0 && event.target instanceof Element && event.target.closest(carouselRegion);
-    carouselPointer = carousel ? { carousel, x: event.clientX, y: event.clientY } : undefined;
-  }, { capture: true, passive: true });
-  window.addEventListener("scroll", event => {
-    if (carouselPointer && (!(event.target instanceof Element) || !carouselPointer.carousel.contains(event.target))) {
-      carouselPointer = undefined;
-    }
-  }, { capture: true, passive: true });
-  window.addEventListener("pointerout", event => {
-    if (event.relatedTarget === null) carouselPointer = undefined;
-  }, { capture: true, passive: true });
+  window.addEventListener(
+    "pointermove",
+    (event) => {
+      if (!enabled || !event.isTrusted || event.pointerType !== "mouse" || (!event.movementX && !event.movementY))
+        return;
+      const carousel = event.buttons === 0 && event.target instanceof Element && event.target.closest(carouselRegion);
+      carouselPointer = carousel ? { carousel, x: event.clientX, y: event.clientY } : undefined;
+    },
+    { capture: true, passive: true },
+  );
+  window.addEventListener(
+    "scroll",
+    (event) => {
+      if (carouselPointer && (!(event.target instanceof Element) || !carouselPointer.carousel.contains(event.target))) {
+        carouselPointer = undefined;
+      }
+    },
+    { capture: true, passive: true },
+  );
+  window.addEventListener(
+    "pointerout",
+    (event) => {
+      if (event.relatedTarget === null) carouselPointer = undefined;
+    },
+    { capture: true, passive: true },
+  );
   window.addEventListener("blur", () => {
     carouselPointer = undefined;
     pendingStartupKey = undefined;
   });
   async function handleKeydown(event: KeyboardEvent) {
-    if (!event.isTrusted || event.defaultPrevented || event.repeat || event.isComposing || event.shiftKey ||
-        event.altKey || event.metaKey || event.ctrlKey) return;
+    if (
+      !event.isTrusted ||
+      event.defaultPrevented ||
+      event.repeat ||
+      event.isComposing ||
+      event.shiftKey ||
+      event.altKey ||
+      event.metaKey ||
+      event.ctrlKey
+    )
+      return;
     const direction = event.key === "ArrowLeft" ? "previous" : event.key === "ArrowRight" ? "next" : undefined;
     if (!direction) return;
     const path = event.composedPath();
@@ -1026,13 +1306,20 @@ type Decisions = import("./protocol.js").Decisions;
       await startupStatus;
       if (pendingStartupKey !== event) return;
       pendingStartupKey = undefined;
-      if (performance.now() - pressedAt > 500 || !document.hasFocus() ||
-          document.activeElement !== focus || location.href !== address) return;
+      if (
+        performance.now() - pressedAt > 500 ||
+        !document.hasFocus() ||
+        document.activeElement !== focus ||
+        location.href !== address
+      )
+        return;
     }
     if (!enabled || event.defaultPrevented) return;
     if (path.some(siteUsesArrowKeys)) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
-    const focusedCarousel = path.find((node): node is Element => node instanceof Element && node.matches(carouselRegion));
+    const focusedCarousel = path.find(
+      (node): node is Element => node instanceof Element && node.matches(carouselRegion),
+    );
     let carousel = focusedCarousel && carouselForKey(focusedCarousel, event.key);
     let more: LoadMore | undefined;
     let target: HTMLElement | undefined;
@@ -1042,8 +1329,8 @@ type Decisions = import("./protocol.js").Decisions;
       const pageTarget = eligibleAtActuation(direction, inspected);
       const otherPageTarget = eligibleAtActuation(direction === "next" ? "previous" : "next", inspected);
       const focused = document.activeElement;
-      const pagerFocused = inspected.group?.root.contains(focused) ||
-        pageTarget?.contains(focused) || otherPageTarget?.contains(focused);
+      const pagerFocused =
+        inspected.group?.root.contains(focused) || pageTarget?.contains(focused) || otherPageTarget?.contains(focused);
       if (!pagerFocused) carousel = pointedCarousel(event.key);
       if (!carousel) {
         more = !pageTarget && direction === "next" ? loadMoreAtEnd() : undefined;
@@ -1068,7 +1355,11 @@ type Decisions = import("./protocol.js").Decisions;
     event.preventDefault();
     if (more) {
       pendingLoadMore = {
-        list: more.list, itemCount: more.itemCount, page: more.page, address: location.href, retryAt: performance.now() + 5000,
+        list: more.list,
+        itemCount: more.itemCount,
+        page: more.page,
+        address: location.href,
+        retryAt: performance.now() + 5000,
       };
     }
     if (carousel) turnSlide(carousel, target, direction);
@@ -1078,11 +1369,17 @@ type Decisions = import("./protocol.js").Decisions;
   const keyOptions = location.hostname === gmailHost ? { capture: true } : undefined;
   window.addEventListener("keydown", handleKeydown, keyOptions);
   if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", () => {
-      window.removeEventListener("keydown", handleKeydown, keyOptions);
-      window.addEventListener("keydown", handleKeydown, keyOptions);
-      observePagination();
-    }, { once: true });
+    window.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        window.removeEventListener("keydown", handleKeydown, keyOptions);
+        window.addEventListener("keydown", handleKeydown, keyOptions);
+        observePagination();
+      },
+      { once: true },
+    );
   }
-  startupStatus = refresh().finally(() => { startupStatus = undefined; });
+  startupStatus = refresh().finally(() => {
+    startupStatus = undefined;
+  });
 })();

@@ -10,14 +10,14 @@ The workflow never uploads to the Chrome Web Store, uses no store credentials, a
 
 Use exactly three numeric parts. Each part is `0`–`65535`, has no leading zero, and the version cannot be `0.0.0`. Chrome accepts one to four parts and treats a missing part as zero, but this repository requires three so tags, artifacts, and store versions compare the same way. See [Chrome manifest version](https://developer.chrome.com/docs/extensions/reference/manifest/version).
 
-| Change | Next version |
-| --- | --- |
-| First release | `0.0.1` |
+| Change                                                            | Next version                     |
+| ----------------------------------------------------------------- | -------------------------------- |
+| First release                                                     | `0.0.1`                          |
 | Before 1.0: compatible feature, fix, documentation, or dependency | Patch, such as `0.0.1` → `0.0.2` |
-| Before 1.0: breaking change or user action | Minor, such as `0.0.2` → `0.1.0` |
-| 1.0 and later: compatible fix | Patch |
-| 1.0 and later: compatible feature | Minor |
-| 1.0 and later: breaking change or user action | Major |
+| Before 1.0: breaking change or user action                        | Minor, such as `0.0.2` → `0.1.0` |
+| 1.0 and later: compatible fix                                     | Patch                            |
+| 1.0 and later: compatible feature                                 | Minor                            |
+| 1.0 and later: breaking change or user action                     | Major                            |
 
 Before 1.0, reserve `1.0.0` for a stable release. After 1.0, follow [Semantic Versioning](https://semver.org/).
 

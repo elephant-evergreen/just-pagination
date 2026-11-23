@@ -1,0 +1,7 @@
+bun.lock
+.github/workflows/
+test/fixtures/
+media/
+extension/assets/
+dist/
+artifacts/

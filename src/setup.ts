@@ -41,28 +41,34 @@ const indicators = pages.map((_, index) => {
 document.querySelector(".page-indicators")!.append(...indicators);
 
 function drawPage() {
-  photos.replaceChildren(...pages[page - 1].map(photo => {
-    const link = document.createElement("a");
-    link.href = photo.href;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    const image = document.createElement("img");
-    image.alt = photo.alt;
-    image.referrerPolicy = "no-referrer";
-    if (photo.y) image.style.setProperty("--y", photo.y + "%");
-    if (photo.smallY) image.style.setProperty("--small-y", photo.smallY + "%");
-    image.addEventListener("error", () => {
-      link.classList.add("unavailable");
-      link.setAttribute("aria-label", `${photo.alt}. Photo unavailable; open on Pexels.`);
-      const fallback = document.createElement("span");
-      fallback.className = "photo-fallback";
-      fallback.textContent = "Photo unavailable — view on Pexels";
-      image.replaceWith(fallback);
-    }, { once: true });
-    link.append(image);
-    image.src = imageSource(photo.href);
-    return link;
-  }));
+  photos.replaceChildren(
+    ...pages[page - 1].map((photo) => {
+      const link = document.createElement("a");
+      link.href = photo.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      const image = document.createElement("img");
+      image.alt = photo.alt;
+      image.referrerPolicy = "no-referrer";
+      if (photo.y) image.style.setProperty("--y", photo.y + "%");
+      if (photo.smallY) image.style.setProperty("--small-y", photo.smallY + "%");
+      image.addEventListener(
+        "error",
+        () => {
+          link.classList.add("unavailable");
+          link.setAttribute("aria-label", `${photo.alt}. Photo unavailable; open on Pexels.`);
+          const fallback = document.createElement("span");
+          fallback.className = "photo-fallback";
+          fallback.textContent = "Photo unavailable — view on Pexels";
+          image.replaceWith(fallback);
+        },
+        { once: true },
+      );
+      link.append(image);
+      image.src = imageSource(photo.href);
+      return link;
+    }),
+  );
   previous.disabled = page === 1;
   next.disabled = page === pages.length;
   pageStatus.textContent = "Page " + page + " of " + pages.length;
@@ -86,11 +92,14 @@ function tapKeyboardCat() {
     catTap.currentTime = 0;
     catTap.play();
   } else {
-    catTap = keyboardCat.animate([
-      { transform: "translateY(-66.666667%)", easing: "steps(1, jump-end)" },
-      { transform: "translateY(-33.333333%)", offset: 0.7, easing: "steps(1, jump-end)" },
-      { transform: "translateY(0)" },
-    ], 150);
+    catTap = keyboardCat.animate(
+      [
+        { transform: "translateY(-66.666667%)", easing: "steps(1, jump-end)" },
+        { transform: "translateY(-33.333333%)", offset: 0.7, easing: "steps(1, jump-end)" },
+        { transform: "translateY(0)" },
+      ],
+      150,
+    );
   }
 }
 
@@ -99,7 +108,7 @@ reducedMotion.addEventListener("change", () => {
 });
 
 function renderForm() {
-  action.disabled = busy || !connected && !field.value.trim();
+  action.disabled = busy || (!connected && !field.value.trim());
   action.textContent = busy ? "" : connected ? "Disconnect" : "Connect";
   action.setAttribute("aria-busy", String(busy));
   if (busy) action.setAttribute("aria-label", connected ? "Disconnecting" : "Connecting");
@@ -124,27 +133,38 @@ function showError(message: string, invalid = false) {
   if (invalid) field.setAttribute("aria-invalid", "true");
 }
 
-field.addEventListener("input", () => { clearError(); renderForm(); });
-form.addEventListener("submit", async event => {
+field.addEventListener("input", () => {
+  clearError();
+  renderForm();
+});
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (busy || !connected && !field.value.trim()) return;
+  if (busy || (!connected && !field.value.trim())) return;
   clearError();
   busy = true;
   const wasConnected = connected;
   renderForm();
   try {
     if (connected) {
-      if (await chrome.runtime.sendMessage({ type: "disconnect" }) !== true) {
+      if ((await chrome.runtime.sendMessage({ type: "disconnect" })) !== true) {
         showError("Could not disconnect. Try again.");
         return;
       }
       connected = false;
     } else {
-      const result = await chrome.runtime.sendMessage({ type: "connect", key: field.value }) as ConnectionResult | null;
+      const result = (await chrome.runtime.sendMessage({
+        type: "connect",
+        key: field.value,
+      })) as ConnectionResult | null;
       if (result !== "connected") {
-        showError(result === "invalid" ? "Check your TypeSafe API key and try again."
-          : result === "no-model" ? "Jev is unavailable for this API key."
-          : "Could not reach TypeSafe. Try again.", result === "invalid");
+        showError(
+          result === "invalid"
+            ? "Check your TypeSafe API key and try again."
+            : result === "no-model"
+              ? "Jev is unavailable for this API key."
+              : "Could not reach TypeSafe. Try again.",
+          result === "invalid",
+        );
         return;
       }
       connected = true;
@@ -162,10 +182,22 @@ form.addEventListener("submit", async event => {
 
 previous.addEventListener("click", () => selectPage(page - 1));
 next.addEventListener("click", () => selectPage(page + 1));
-document.addEventListener("keydown", event => {
-  if (event.defaultPrevented || event.repeat || event.isComposing ||
-      event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
-  if (event.target instanceof Element && event.target.closest("input:not([readonly]),textarea,select,[contenteditable]:not([contenteditable=false])")) return;
+document.addEventListener("keydown", (event) => {
+  if (
+    event.defaultPrevented ||
+    event.repeat ||
+    event.isComposing ||
+    event.shiftKey ||
+    event.altKey ||
+    event.metaKey ||
+    event.ctrlKey
+  )
+    return;
+  if (
+    event.target instanceof Element &&
+    event.target.closest("input:not([readonly]),textarea,select,[contenteditable]:not([contenteditable=false])")
+  )
+    return;
   if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
   const key: ArrowKey = event.key;
   if (!hints[key].classList.contains("dismissed")) {
@@ -180,7 +212,7 @@ document.addEventListener("keydown", event => {
 });
 
 try {
-  const connection = await chrome.runtime.sendMessage({ type: "setup-status" }) as SetupStatus | null;
+  const connection = (await chrome.runtime.sendMessage({ type: "setup-status" })) as SetupStatus | null;
   if (!connection) throw new Error("Setup status unavailable");
   connected = connection.connected;
   for (const key of connection.tried) {

@@ -3,8 +3,8 @@ import { imageSource, pages } from "../src/gallery-data.ts";
 
 test("maps every gallery photo to one unique Pexels image", () => {
   expect(pages).toHaveLength(12);
-  expect(pages.every(page => page.length === 3)).toBe(true);
-  const hrefs = pages.flat().map(photo => photo.href);
+  expect(pages.every((page) => page.length === 3)).toBe(true);
+  const hrefs = pages.flat().map((photo) => photo.href);
   expect(new Set(hrefs).size).toBe(36);
   const sources = hrefs.map(imageSource);
   expect(new Set(sources).size).toBe(36);

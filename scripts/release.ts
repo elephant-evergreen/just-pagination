@@ -11,7 +11,7 @@ export function releaseVersion(manifest: ReleaseManifest): string {
     throw new Error("Expected a Manifest V3 extension with a three-part numeric version.");
   }
   const parts = version.split(".").map(Number);
-  if (parts.some(part => part > 65535) || parts.every(part => part === 0)) {
+  if (parts.some((part) => part > 65535) || parts.every((part) => part === 0)) {
     throw new Error("Expected each version part to be 0-65535 and the version to be greater than 0.0.0.");
   }
   return version;

@@ -27,17 +27,22 @@ export async function evaluateFixture(fixture: Fixture): Promise<Evaluation> {
     makeDocument(fixture, document);
     for (const element of document.querySelectorAll<HTMLElement>("*")) element.style.visibility = "visible";
     installGlobals(window, fallbackDirections);
-    document.addEventListener("click", event => {
-      const target = event.target instanceof window.Element
-        ? (event.target as unknown as Element).closest("[data-fixture-id]")
-        : undefined;
-      const key = target?.getAttribute("data-fixture-id");
-      if (key) clicked.push(key);
-      event.preventDefault();
-    }, true);
+    document.addEventListener(
+      "click",
+      (event) => {
+        const target =
+          event.target instanceof window.Element
+            ? (event.target as unknown as Element).closest("[data-fixture-id]")
+            : undefined;
+        const key = target?.getAttribute("data-fixture-id");
+        if (key) clicked.push(key);
+        event.preventDefault();
+      },
+      true,
+    );
     Reflect.deleteProperty(globalThis, "justPaginationInstalled");
     await import(`../../src/content.ts?pagination-eval=${++importSequence}`);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const actual = { previous: null, next: null } as Record<Direction, string | null>;
     for (const direction of directions) {
       const key = direction === "previous" ? "ArrowLeft" : "ArrowRight";
@@ -63,7 +68,7 @@ function makeDocument(fixture: Fixture, document: Document) {
     link.href = routeHref(entry.href);
     document.head.append(link);
   }
-  document.body.replaceChildren(...fixture.body.map(node => buildNode(document, node)));
+  document.body.replaceChildren(...fixture.body.map((node) => buildNode(document, node)));
 }
 
 function buildNode(document: Document, node: FixtureNode, insideForm = false): HTMLElement {
@@ -108,8 +113,12 @@ function installGlobals(window: Window, fallbackDirections: Set<Direction>) {
     runtime: {
       sendMessage(message: unknown) {
         if (isRecord(message) && message.type === "content-status") return Promise.resolve(true);
-        if (isRecord(message) && message.type === "classify" && isRecord(message.data) &&
-            Array.isArray(message.data.needed)) {
+        if (
+          isRecord(message) &&
+          message.type === "classify" &&
+          isRecord(message.data) &&
+          Array.isArray(message.data.needed)
+        ) {
           for (const direction of message.data.needed) {
             if (direction === "previous" || direction === "next") fallbackDirections.add(direction);
           }
@@ -135,8 +144,11 @@ export function patchSelectorEngine(window: Window) {
   const normalize = (selector: string) => selector.replace(/\s+i\]/g, "]");
   const roots: object[] = [window.document, window.document.createElement("div")];
   for (const root of roots) {
-    for (let prototype = Object.getPrototypeOf(root); prototype && prototype !== Object.prototype;
-      prototype = Object.getPrototypeOf(prototype)) {
+    for (
+      let prototype = Object.getPrototypeOf(root);
+      prototype && prototype !== Object.prototype;
+      prototype = Object.getPrototypeOf(prototype)
+    ) {
       if (patchedPrototypes.has(prototype)) continue;
       patchedPrototypes.add(prototype);
       for (const name of ["querySelectorAll", "querySelector", "matches", "closest"] as const) {
@@ -168,7 +180,7 @@ function saveGlobals() {
     "getComputedStyle",
     "justPaginationInstalled",
   ] as const;
-  const saved = names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
+  const saved = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
   return {
     restore() {
       for (const [name, descriptor] of saved) {

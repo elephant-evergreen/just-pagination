@@ -1,24 +1,28 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Just Pagination</title>
-<link rel="stylesheet" href="controls.css">
-<link rel="stylesheet" href="popup.css">
-</head>
-<body>
-<header><img src="assets/icon-32.png" alt="">Just Pagination</header>
-<div class="shortcut" aria-label="Turn pages with the left and right arrow keys">
-  <span>Turn pages</span>
-  <kbd aria-hidden="true">←</kbd><kbd aria-hidden="true">→</kbd>
-</div>
-<p class="site"><span id="host"></span><span id="status" role="status">Loading site…</span></p>
-<button type="button" class="action" id="site" disabled>Disable</button>
-<footer>
-  <span id="error" role="status"></span>
-  <a href="settings.html" target="_blank" rel="noopener" aria-label="Settings (opens in a new tab)">Settings <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 3h4v4m0-4L7 9m5 0v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3"/></svg></a>
-</footer>
-<script type="module" src="popup.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Just Pagination</title>
+    <link rel="stylesheet" href="controls.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header><img src="assets/icon-32.png" alt="" />Just Pagination</header>
+    <div class="shortcut" aria-label="Turn pages with the left and right arrow keys">
+      <span>Turn pages</span>
+      <kbd aria-hidden="true">←</kbd><kbd aria-hidden="true">→</kbd>
+    </div>
+    <p class="site"><span id="host"></span><span id="status" role="status">Loading site…</span></p>
+    <button type="button" class="action" id="site" disabled>Disable</button>
+    <footer>
+      <span id="error" role="status"></span>
+      <a href="settings.html" target="_blank" rel="noopener" aria-label="Settings (opens in a new tab)"
+        >Settings
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M9 3h4v4m0-4L7 9m5 0v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3" /></svg
+      ></a>
+    </footer>
+    <script type="module" src="popup.js"></script>
+  </body>
 </html>

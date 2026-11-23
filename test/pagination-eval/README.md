@@ -22,11 +22,11 @@ destination URL, an array, or `null`). Expected destinations currently match anc
 ```sh
 mise run check
 
-bun tools/pagination-eval/intake.ts \
+bun test/pagination-eval/intake.ts \
   --input path/to/private/source.jsonl \
   --out path/to/private/fixtures.jsonl
 
-bun tools/pagination-eval/run.ts \
+bun test/pagination-eval/run.ts \
   --fixtures path/to/private/fixtures.jsonl \
   --report path/to/private/report.json \
   --regressions path/to/private/regressions.jsonl
@@ -35,7 +35,7 @@ bun tools/pagination-eval/run.ts \
 The committed clean path is:
 
 ```sh
-bun tools/pagination-eval/run.ts --fixtures test/fixtures/pagination-eval/cases.jsonl
+bun test/pagination-eval/run.ts --fixtures test/fixtures/pagination-eval/cases.jsonl
 ```
 
 It covers local links, numbered lists, metadata, buttons, icon controls, cross-site and

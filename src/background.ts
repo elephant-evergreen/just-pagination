@@ -15,10 +15,16 @@ async function preferences() {
   return {
     key: typeof jevKey === "string" && jevKey.length > 0 ? jevKey : undefined,
     connection: typeof jevConnection === "string" ? jevConnection : "",
-    disabled: Array.isArray(pausedSites) ? [...new Set(pausedSites.flatMap(site => {
-      const host = typeof site === "string" ? enteredHost(site) : undefined;
-      return host ? [host] : [];
-    }))] : [],
+    disabled: Array.isArray(pausedSites)
+      ? [
+          ...new Set(
+            pausedSites.flatMap((site) => {
+              const host = typeof site === "string" ? enteredHost(site) : undefined;
+              return host ? [host] : [];
+            }),
+          ),
+        ]
+      : [],
   };
 }
 
@@ -33,35 +39,49 @@ async function siteStatus(url?: string): Promise<SiteInfo> {
 }
 
 function setDisabled(host: string, disabled: boolean) {
-  const update = siteUpdates.catch(() => {}).then(async () => {
-    const { disabled: saved } = await preferences();
-    const next = new Set(saved);
-    if (disabled) next.add(host);
-    else next.delete(host);
-    await local.set({ pausedSites: [...next] });
-    void refreshTabs();
-  });
+  const update = siteUpdates
+    .catch(() => {})
+    .then(async () => {
+      const { disabled: saved } = await preferences();
+      const next = new Set(saved);
+      if (disabled) next.add(host);
+      else next.delete(host);
+      await local.set({ pausedSites: [...next] });
+      void refreshTabs();
+    });
   siteUpdates = update;
   return update.then(() => true);
 }
 
 async function refreshTabs(jevChanged = false) {
   const tabs = await chrome.tabs.query({});
-  await Promise.allSettled(tabs.filter(tab => tab.id !== undefined).map(tab =>
-    chrome.tabs.sendMessage(tab.id!, { type: "refresh", jevChanged }),
-  ));
+  await Promise.allSettled(
+    tabs
+      .filter((tab) => tab.id !== undefined)
+      .map((tab) => chrome.tabs.sendMessage(tab.id!, { type: "refresh", jevChanged })),
+  );
 }
 
-chrome.permissions.onAdded.addListener(() => { void refreshTabs().catch(() => {}); });
-chrome.permissions.onRemoved.addListener(() => { void refreshTabs().catch(() => {}); });
-chrome.runtime.onInstalled.addListener(details => {
+chrome.permissions.onAdded.addListener(() => {
+  void refreshTabs().catch(() => {});
+});
+chrome.permissions.onRemoved.addListener(() => {
+  void refreshTabs().catch(() => {});
+});
+chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") void chrome.tabs.create({ url: settings });
 });
 
 let classificationQueue = Promise.resolve();
 const pendingClassifications = new Map<string, Promise<Decisions>>();
 
-async function cachedClassification(key: string, documentId: string, data: Classification, cacheKey: string, revision: number): Promise<Decisions> {
+async function cachedClassification(
+  key: string,
+  documentId: string,
+  data: Classification,
+  cacheKey: string,
+  revision: number,
+): Promise<Decisions> {
   const pending = pendingClassifications.get(cacheKey);
   if (pending) return pending;
   const operation = (async () => {
@@ -71,10 +91,10 @@ async function cachedClassification(key: string, documentId: string, data: Class
     if (isRecord(saved) && typeof saved.until === "number" && saved.until > Date.now() && isRecord(saved.decisions)) {
       return saved.decisions as Decisions;
     }
-    if (!await reserveClassification(documentId) || revision !== connectionRevision) return {};
+    if (!(await reserveClassification(documentId)) || revision !== connectionRevision) return {};
     const decisions = await classify(key, data);
     if (revision !== connectionRevision) return {};
-    if (data.needed.every(direction => Object.hasOwn(decisions, direction))) {
+    if (data.needed.every((direction) => Object.hasOwn(decisions, direction))) {
       await chrome.storage.session.set({ [storageKey]: { until: Date.now() + 3600_000, decisions } });
     }
     return decisions;
@@ -90,28 +110,35 @@ async function cachedClassification(key: string, documentId: string, data: Class
 async function classificationKey(url: URL, layout: string, data: Classification, connection: string) {
   const bytes = new TextEncoder().encode(JSON.stringify([url.origin, layout, data, connection]));
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  return Array.from(digest, value => value.toString(16).padStart(2, "0")).join("");
+  return Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 function reserveClassification(documentId: string) {
   let permitted = false;
-  classificationQueue = classificationQueue.catch(() => {}).then(async () => {
-    const { jevBudget } = await chrome.storage.session.get("jevBudget");
-    const now = Date.now();
-    const { since, documents } = isRecord(jevBudget) && typeof jevBudget.since === "number" &&
-      Array.isArray(jevBudget.documents) && now - jevBudget.since < 3600_000
-      ? { since: jevBudget.since, documents: jevBudget.documents as string[] }
-      : { since: now, documents: [] };
-    if (documents.length >= 20 || documents.includes(documentId)) return;
-    if (!documents.length) {
-      const stored = await chrome.storage.session.get();
-      const expired = Object.entries(stored).filter(([name, value]) =>
-        name.startsWith("jev:") && (!isRecord(value) || typeof value.until !== "number" || value.until <= now));
-      if (expired.length) await chrome.storage.session.remove(expired.map(([name]) => name));
-    }
-    await chrome.storage.session.set({ jevBudget: { since, documents: [...documents, documentId] } });
-    permitted = true;
-  });
+  classificationQueue = classificationQueue
+    .catch(() => {})
+    .then(async () => {
+      const { jevBudget } = await chrome.storage.session.get("jevBudget");
+      const now = Date.now();
+      const { since, documents } =
+        isRecord(jevBudget) &&
+        typeof jevBudget.since === "number" &&
+        Array.isArray(jevBudget.documents) &&
+        now - jevBudget.since < 3600_000
+          ? { since: jevBudget.since, documents: jevBudget.documents as string[] }
+          : { since: now, documents: [] };
+      if (documents.length >= 20 || documents.includes(documentId)) return;
+      if (!documents.length) {
+        const stored = await chrome.storage.session.get();
+        const expired = Object.entries(stored).filter(
+          ([name, value]) =>
+            name.startsWith("jev:") && (!isRecord(value) || typeof value.until !== "number" || value.until <= now),
+        );
+        if (expired.length) await chrome.storage.session.remove(expired.map(([name]) => name));
+      }
+      await chrome.storage.session.set({ jevBudget: { since, documents: [...documents, documentId] } });
+      permitted = true;
+    });
   return classificationQueue.then(() => permitted);
 }
 
@@ -148,14 +175,19 @@ async function handle(message: Record<string, unknown>, sender: chrome.runtime.M
       const saved = await local.get(["jevKey", ...arrowKeys]);
       return {
         connected: typeof saved.jevKey === "string" && saved.jevKey.length > 0,
-        tried: arrowKeys.filter(key => saved[key] === true),
+        tried: arrowKeys.filter((key) => saved[key] === true),
       } satisfies SetupStatus;
     }
   }
   if (sender.url === settings || sender.url === popup) {
     if (message.type === "disabled-sites" && sender.url === settings) return (await preferences()).disabled;
-    if (message.type === "site-status" && sender.url === popup && typeof message.url === "string") return siteStatus(message.url);
-    if (message.type === "set-site-disabled" && typeof message.host === "string" && typeof message.disabled === "boolean") {
+    if (message.type === "site-status" && sender.url === popup && typeof message.url === "string")
+      return siteStatus(message.url);
+    if (
+      message.type === "set-site-disabled" &&
+      typeof message.host === "string" &&
+      typeof message.disabled === "boolean"
+    ) {
       const host = enteredHost(message.host);
       if (host && host === message.host) return setDisabled(host, message.disabled);
     }
@@ -168,12 +200,17 @@ async function handle(message: Record<string, unknown>, sender: chrome.runtime.M
     if (!data || !sender.documentId || (await siteStatus(sender.url)).status !== "ready") return {};
     const { key, connection } = await preferences();
     if (!key || revision !== connectionRevision) return {};
-    if (typeof message.layout === "string" && message.layout.length > 0 && message.layout.length <= 8192 && sender.url) {
+    if (
+      typeof message.layout === "string" &&
+      message.layout.length > 0 &&
+      message.layout.length <= 8192 &&
+      sender.url
+    ) {
       const cacheKey = await classificationKey(new URL(sender.url), message.layout, data, connection);
       if (revision !== connectionRevision) return {};
       return cachedClassification(key, sender.documentId, data, cacheKey, revision);
     }
-    if (!await reserveClassification(sender.documentId) || revision !== connectionRevision) return {};
+    if (!(await reserveClassification(sender.documentId)) || revision !== connectionRevision) return {};
     const decisions = await classify(key, data);
     return revision === connectionRevision ? decisions : {};
   }

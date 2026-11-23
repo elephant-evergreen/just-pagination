@@ -21,7 +21,7 @@ export type ConnectionResult = "connected" | "invalid" | "unavailable" | "no-mod
 export type SiteStatus = "ready" | "disabled" | "no-access" | "unsupported";
 export type SiteInfo = { status: SiteStatus; host?: string };
 export const arrowKeys = ["ArrowLeft", "ArrowRight"] as const;
-export type ArrowKey = typeof arrowKeys[number];
+export type ArrowKey = (typeof arrowKeys)[number];
 export type SetupStatus = { connected: boolean; tried: ArrowKey[] };
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

@@ -7,5 +7,5 @@
     "allowImportingTsExtensions": true,
     "types": ["chrome", "bun"]
   },
-  "include": ["*.ts", "src/**/*.ts", "test/**/*.ts", "tools/**/*.ts"]
+  "include": ["*.ts", "src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"]
 }
