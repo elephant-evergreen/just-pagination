@@ -1,101 +1,195 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Just Pagination Settings</title>
-<link rel="stylesheet" href="controls.css">
-<link rel="stylesheet" href="setup.css">
-</head>
-<body>
-<main class="board" aria-label="Just Pagination Settings">
-  <div class="window">
-    <header class="bar"><div class="brand"><img class="mark" src="assets/icon.png" alt="">Just Pagination</div></header>
-    <div class="keyboard-cat" aria-hidden="true"><img src="assets/keyboard-cat.png" width="112" height="318" alt=""></div>
-    <div class="layout">
-      <section class="setup" aria-label="Jev setup">
-        <form id="connection" novalidate>
-          <label class="field-label" for="jev-key">Jev API key (optional)</label>
-          <a class="key-link" href="https://console.typesafe.ai/keys" aria-label="Get an API key (opens in a new tab)" target="_blank" rel="noopener noreferrer">Get an API key</a>
-          <input class="field" id="jev-key" aria-describedby="connection-note" type="password" placeholder="Paste your key" autocomplete="off" spellcheck="false">
-          <p class="form-note" id="connection-note" aria-live="polite">Jev helps identify unclear page controls. TypeSafe may receive navigation hints and charge for usage.</p>
-          <span class="sr connection-status" role="status"></span>
-          <button class="connect action" type="submit" disabled>Connect</button>
-        </form>
-      </section>
-      <section class="gallery" tabindex="-1" aria-label="Cat photo sample">
-        <div class="gallery-head">
-          <h2>Try the arrow keys</h2>
-          <a class="photo-credit" href="photo-credits.html" target="_blank" rel="noopener" aria-label="Photos load from Pexels. Open photo credits.">Photos load from Pexels</a>
-          <span class="sr page-status" aria-live="polite"></span>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Just Pagination Settings</title>
+    <link rel="stylesheet" href="controls.css" />
+    <link rel="stylesheet" href="setup.css" />
+  </head>
+  <body>
+    <main class="board" aria-label="Just Pagination Settings">
+      <div class="window">
+        <header class="bar">
+          <div class="brand"><img class="mark" src="assets/icon.png" alt="" />Just Pagination</div>
+        </header>
+        <div class="keyboard-cat" aria-hidden="true">
+          <img src="assets/keyboard-cat.png" width="112" height="318" alt="" />
         </div>
-        <div class="photo-area">
-          <div class="photos"></div>
-          <div class="key-cue" aria-hidden="true">
-            <kbd data-key="ArrowLeft"><span class="symbol"></span></kbd>
-            <kbd data-key="ArrowRight"><span class="symbol"></span></kbd>
-          </div>
+        <div class="layout">
+          <section class="setup" aria-label="Jev setup">
+            <form id="connection" novalidate>
+              <label class="field-label" for="jev-key">Jev API key (optional)</label>
+              <a
+                class="key-link"
+                href="https://console.typesafe.ai/keys"
+                aria-label="Get an API key (opens in a new tab)"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Get an API key</a
+              >
+              <input
+                class="field"
+                id="jev-key"
+                aria-describedby="connection-note"
+                type="password"
+                placeholder="Paste your key"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <p class="form-note" id="connection-note" aria-live="polite">
+                Jev helps identify unclear page controls. TypeSafe may receive navigation hints and charge for usage.
+              </p>
+              <span class="sr connection-status" role="status"></span>
+              <button class="connect action" type="submit" disabled>Connect</button>
+            </form>
+          </section>
+          <section class="gallery" tabindex="-1" aria-label="Cat photo sample">
+            <div class="gallery-head">
+              <h2>Try the arrow keys</h2>
+              <a
+                class="photo-credit"
+                href="photo-credits.html"
+                target="_blank"
+                rel="noopener"
+                aria-label="Photos load from Pexels. Open photo credits."
+                >Photos load from Pexels</a
+              >
+              <span class="sr page-status" aria-live="polite"></span>
+            </div>
+            <div class="photo-area">
+              <div class="photos"></div>
+              <div class="key-cue" aria-hidden="true">
+                <kbd data-key="ArrowLeft"><span class="symbol"></span></kbd>
+                <kbd data-key="ArrowRight"><span class="symbol"></span></kbd>
+              </div>
+            </div>
+            <nav class="pager" aria-label="Photo pages" tabindex="-1">
+              <button type="button" class="arrow previous" aria-label="Previous page">‹</button>
+              <div class="page-indicators" role="group" aria-label="Page numbers"></div>
+              <button type="button" class="arrow next" aria-label="Next page">›</button>
+            </nav>
+            <p class="gallery-note">No Jev API key needed for the demo or standard pagination.</p>
+          </section>
+          <section class="sites" aria-labelledby="sites-heading">
+            <h2 id="sites-heading">Disabled sites</h2>
+            <form id="sites" novalidate>
+              <div class="site-fields">
+                <input
+                  type="text"
+                  id="site-url"
+                  inputmode="url"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Page URL"
+                  aria-describedby="site-note"
+                  placeholder="Page URL"
+                  disabled
+                />
+                <button type="submit" class="action" id="disable-site" disabled>Disable</button>
+              </div>
+              <p id="site-note" role="status"></p>
+            </form>
+            <div id="site-list" role="region" aria-label="Disabled sites list" tabindex="0">
+              <div class="empty-sites" id="empty-sites" hidden>
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <circle cx="10" cy="10" r="7.25" />
+                  <ellipse cx="10" cy="10" rx="3.25" ry="7.25" />
+                  <path d="M3 10h14" />
+                </svg>
+                <span>No disabled sites</span>
+              </div>
+              <ul id="site-rows"></ul>
+            </div>
+          </section>
         </div>
-        <nav class="pager" aria-label="Photo pages" tabindex="-1"><button type="button" class="arrow previous" aria-label="Previous page">‹</button><div class="page-indicators" role="group" aria-label="Page numbers"></div><button type="button" class="arrow next" aria-label="Next page">›</button></nav>
-        <p class="gallery-note">No Jev API key needed for the demo or standard pagination.</p>
-      </section>
-      <section class="sites" aria-labelledby="sites-heading">
-        <h2 id="sites-heading">Disabled sites</h2>
-        <form id="sites" novalidate>
-          <div class="site-fields">
-            <input type="text" id="site-url" inputmode="url" autocomplete="off" spellcheck="false" aria-label="Page URL" aria-describedby="site-note" placeholder="Page URL" disabled>
-            <button type="submit" class="action" id="disable-site" disabled>Disable</button>
+        <footer class="company-footer">
+          <div class="footer-inner">
+            <div class="footer-main">
+              <div class="footer-brand">
+                <a
+                  class="footer-organization"
+                  href="https://github.com/elephant-evergreen"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Elephant Evergreen (opens in a new tab)"
+                >
+                  <img class="organization-avatar" src="assets/elephant-evergreen.png" width="27" height="27" alt="" />
+                  <span>Elephant Evergreen</span>
+                </a>
+                <small class="footer-copyright">© 2026</small>
+              </div>
+              <nav class="footer-columns" aria-label="Project links">
+                <section>
+                  <h2>Extension</h2>
+                  <ul>
+                    <li>
+                      <a
+                        href="https://chromewebstore.google.com/detail/just-pagination/ijhnpclghelmocegpignnkfgieifcaeb"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Chrome Web Store (opens in a new tab)"
+                        ><img src="assets/chrome-web-store.png" width="12" height="12" alt="" /><span
+                          >Chrome Web Store</span
+                        ></a
+                      >
+                    </li>
+                  </ul>
+                </section>
+                <section>
+                  <h2>Project</h2>
+                  <ul>
+                    <li>
+                      <a
+                        href="https://github.com/elephant-evergreen/just-pagination"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="GitHub (opens in a new tab)"
+                        ><img src="assets/github.png" width="10" height="10" alt="" /><span>GitHub</span></a
+                      >
+                    </li>
+                    <li>
+                      <a
+                        href="https://github.com/elephant-evergreen/just-pagination/releases"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Release notes (opens in a new tab)"
+                        >Release notes</a
+                      >
+                    </li>
+                  </ul>
+                </section>
+                <section>
+                  <h2>Support</h2>
+                  <ul>
+                    <li>
+                      <a
+                        href="https://github.com/elephant-evergreen/just-pagination/issues"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Report an issue (opens in a new tab)"
+                        >Report an issue</a
+                      >
+                    </li>
+                    <li>
+                      <a
+                        href="https://github.com/elephant-evergreen/just-pagination/blob/main/PRIVACY.md"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Privacy policy (opens in a new tab)"
+                        >Privacy policy</a
+                      >
+                    </li>
+                  </ul>
+                </section>
+              </nav>
+            </div>
+            <small class="footer-version"></small>
           </div>
-          <p id="site-note" role="status"></p>
-        </form>
-        <div id="site-list" role="region" aria-label="Disabled sites list" tabindex="0">
-          <div class="empty-sites" id="empty-sites" hidden>
-            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25"/><ellipse cx="10" cy="10" rx="3.25" ry="7.25"/><path d="M3 10h14"/></svg>
-            <span>No disabled sites</span>
-          </div>
-          <ul id="site-rows"></ul>
-        </div>
-      </section>
-    </div>
-    <footer class="company-footer">
-      <div class="footer-inner">
-        <div class="footer-main">
-          <div class="footer-brand">
-            <a class="footer-organization" href="https://github.com/elephant-evergreen" target="_blank" rel="noopener noreferrer" aria-label="Elephant Evergreen (opens in a new tab)">
-              <img class="organization-avatar" src="assets/elephant-evergreen.png" width="27" height="27" alt="">
-              <span>Elephant Evergreen</span>
-            </a>
-            <small class="footer-copyright">© 2026</small>
-          </div>
-          <nav class="footer-columns" aria-label="Project links">
-            <section>
-              <h2>Extension</h2>
-              <ul>
-                <li><a href="https://chromewebstore.google.com/detail/just-pagination/ijhnpclghelmocegpignnkfgieifcaeb" target="_blank" rel="noopener noreferrer" aria-label="Chrome Web Store (opens in a new tab)"><img src="assets/chrome-web-store.png" width="12" height="12" alt=""><span>Chrome Web Store</span></a></li>
-              </ul>
-            </section>
-            <section>
-              <h2>Project</h2>
-              <ul>
-                <li><a href="https://github.com/elephant-evergreen/just-pagination" target="_blank" rel="noopener noreferrer" aria-label="GitHub (opens in a new tab)"><img src="assets/github.png" width="10" height="10" alt=""><span>GitHub</span></a></li>
-                <li><a href="https://github.com/elephant-evergreen/just-pagination/releases" target="_blank" rel="noopener noreferrer" aria-label="Release notes (opens in a new tab)">Release notes</a></li>
-              </ul>
-            </section>
-            <section>
-              <h2>Support</h2>
-              <ul>
-                <li><a href="https://github.com/elephant-evergreen/just-pagination/issues" target="_blank" rel="noopener noreferrer" aria-label="Report an issue (opens in a new tab)">Report an issue</a></li>
-                <li><a href="https://github.com/elephant-evergreen/just-pagination/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" aria-label="Privacy policy (opens in a new tab)">Privacy policy</a></li>
-              </ul>
-            </section>
-          </nav>
-        </div>
-        <small class="footer-version"></small>
+        </footer>
       </div>
-    </footer>
-  </div>
-</main>
-<script type="module" src="setup.js"></script>
-<script type="module" src="sites.js"></script>
-</body>
+    </main>
+    <script type="module" src="setup.js"></script>
+    <script type="module" src="sites.js"></script>
+  </body>
 </html>

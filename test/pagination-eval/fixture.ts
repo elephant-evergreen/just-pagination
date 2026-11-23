@@ -16,7 +16,7 @@ export const pageKeys = [
   "bsi",
 ] as const;
 
-export type PageKey = typeof pageKeys[number];
+export type PageKey = (typeof pageKeys)[number];
 export type Site = "same" | "other";
 export type RouteShape = "plain" | "query" | "page-path" | "numbered-path" | "index";
 
@@ -162,19 +162,32 @@ export function isLabel(value: unknown): value is Label {
 export function labelText(label: Label): string {
   if (labels.has(label)) {
     switch (label) {
-      case "prev": return "Previous";
-      case "next": return "Next";
-      case "older": return "Older posts";
-      case "newer": return "Newer posts";
-      case "first": return "First";
-      case "last": return "Last";
-      case "ellipsis": return "…";
-      case "icon": return "";
-      case "label": return "Label";
-      case "nav": return "Pagination";
-      case "pager": return "Pager";
-      case "pageNav": return "Page navigation";
-      case "pageNumbers": return "Page numbers";
+      case "prev":
+        return "Previous";
+      case "next":
+        return "Next";
+      case "older":
+        return "Older posts";
+      case "newer":
+        return "Newer posts";
+      case "first":
+        return "First";
+      case "last":
+        return "Last";
+      case "ellipsis":
+        return "…";
+      case "icon":
+        return "";
+      case "label":
+        return "Label";
+      case "nav":
+        return "Pagination";
+      case "pager":
+        return "Pager";
+      case "pageNav":
+        return "Page navigation";
+      case "pageNumbers":
+        return "Page numbers";
     }
   }
   const match = label.match(labelPattern)!;
@@ -187,7 +200,7 @@ export function labelText(label: Label): string {
 
 export function classTokens(flags: readonly ClassFlag[] | undefined): string[] {
   if (!flags) return [];
-  return flags.flatMap(flag => {
+  return flags.flatMap((flag) => {
     if (flag === "pageNav") return ["page-nav"];
     return [flag];
   });
@@ -210,17 +223,18 @@ export function routeHref(route: Route): string {
 
 export function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return `[${value.map(item => stableStringify(item)).join(",")}]`;
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(",")}]`;
   const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map(key =>
-    `${JSON.stringify(key)}:${stableStringify(record[key])}`,
-  ).join(",")}}`;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(",")}}`;
 }
 
 export async function sha256(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  return Array.from(digest, byte => byte.toString(16).padStart(2, "0")).join("");
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export function fixturePayload(fixture: Fixture): FixturePayload {
@@ -234,7 +248,9 @@ export function fixturePayload(fixture: Fixture): FixturePayload {
 }
 
 export async function fixtureDigest(fixture: FixturePayload | Fixture): Promise<string> {
-  return sha256(stableStringify("version" in fixture && "id" in fixture ? fixturePayload(fixture as Fixture) : fixture));
+  return sha256(
+    stableStringify("version" in fixture && "id" in fixture ? fixturePayload(fixture as Fixture) : fixture),
+  );
 }
 
 export async function sealFixture(payload: FixturePayload): Promise<Fixture> {
@@ -243,14 +259,16 @@ export async function sealFixture(payload: FixturePayload): Promise<Fixture> {
 
 export async function fixtureShapeDigest(fixture: Fixture): Promise<string> {
   const currentPage = fixture.url.page;
-  const hrefShape = (href: Route | undefined) => href && {
-    site: href.site,
-    shape: href.shape,
-    pageRelation: href.page === undefined || currentPage === undefined ? null : href.page - currentPage,
-    pageKey: href.key ?? null,
-    filterCount: href.filters?.length ?? 0,
-  };
-  const shapeLabel = (label: Label | undefined) => label === undefined ? null : label.replace(numericLabelShape, "$1");
+  const hrefShape = (href: Route | undefined) =>
+    href && {
+      site: href.site,
+      shape: href.shape,
+      pageRelation: href.page === undefined || currentPage === undefined ? null : href.page - currentPage,
+      pageKey: href.key ?? null,
+      filterCount: href.filters?.length ?? 0,
+    };
+  const shapeLabel = (label: Label | undefined) =>
+    label === undefined ? null : label.replace(numericLabelShape, "$1");
   const nodeShape = (node: FixtureNode): unknown => ({
     tag: node.tag,
     text: shapeLabel(node.text),
@@ -274,22 +292,24 @@ export async function fixtureShapeDigest(fixture: Fixture): Promise<string> {
     svg: node.svg ?? null,
     children: node.children?.map(nodeShape) ?? [],
   });
-  return sha256(stableStringify({
-    version: fixture.version,
-    url: {
-      site: fixture.url.site,
-      shape: fixture.url.shape,
-      hasPage: fixture.url.page !== undefined,
-      pageKey: fixture.url.key ?? null,
-      filterCount: fixture.url.filters?.length ?? 0,
-    },
-    head: fixture.head.map(entry => ({ rel: entry.rel, href: hrefShape(entry.href) })),
-    body: fixture.body.map(nodeShape),
-    expected: {
-      previous: fixture.expected.previous?.length ?? null,
-      next: fixture.expected.next?.length ?? null,
-    },
-  }));
+  return sha256(
+    stableStringify({
+      version: fixture.version,
+      url: {
+        site: fixture.url.site,
+        shape: fixture.url.shape,
+        hasPage: fixture.url.page !== undefined,
+        pageKey: fixture.url.key ?? null,
+        filterCount: fixture.url.filters?.length ?? 0,
+      },
+      head: fixture.head.map((entry) => ({ rel: entry.rel, href: hrefShape(entry.href) })),
+      body: fixture.body.map(nodeShape),
+      expected: {
+        previous: fixture.expected.previous?.length ?? null,
+        next: fixture.expected.next?.length ?? null,
+      },
+    }),
+  );
 }
 
 export async function parseFixture(value: unknown): Promise<Fixture> {
@@ -322,7 +342,7 @@ export async function parseFixture(value: unknown): Promise<Fixture> {
     const value = expectedRecord[direction];
     if (value === undefined) continue;
     if (!Array.isArray(value) || value.length > 64) throw new TypeError(`fixture.expected.${direction}`);
-    const expectedKeys = value.map(entry => {
+    const expectedKeys = value.map((entry) => {
       if (typeof entry !== "string" || !keys.has(entry)) throw new TypeError(`fixture.expected.${direction}`);
       return entry;
     });
@@ -333,29 +353,55 @@ export async function parseFixture(value: unknown): Promise<Fixture> {
     expected[direction] = expectedKeys;
   }
   const payload: FixturePayload = { version: fixtureVersion, url, head, body, expected };
-  if (await fixtureDigest(payload) !== fixture.id) throw new TypeError("fixture.id.digest");
+  if ((await fixtureDigest(payload)) !== fixture.id) throw new TypeError("fixture.id.digest");
   return { ...payload, id: fixture.id };
 }
 
 function parseNode(value: unknown, path: string, keys: Set<string>, depth: number, count: () => number): FixtureNode {
   if (depth > 20) throw new TypeError(`${path}.depth`);
   const node = record(value, path);
-  exactKeys(node, [
-    "tag", "key", "text", "ariaLabel", "title", "role", "flags", "ariaCurrent", "ariaDisabled", "ariaHidden",
-    "disabled", "hidden", "inert", "dataPagination", "rel", "href", "targetBlank", "targetOther", "download",
-    "inForm", "svg", "children",
-  ], path, true);
+  exactKeys(
+    node,
+    [
+      "tag",
+      "key",
+      "text",
+      "ariaLabel",
+      "title",
+      "role",
+      "flags",
+      "ariaCurrent",
+      "ariaDisabled",
+      "ariaHidden",
+      "disabled",
+      "hidden",
+      "inert",
+      "dataPagination",
+      "rel",
+      "href",
+      "targetBlank",
+      "targetOther",
+      "download",
+      "inForm",
+      "svg",
+      "children",
+    ],
+    path,
+    true,
+  );
   if (typeof node.tag !== "string" || !tags.has(node.tag)) throw new TypeError(`${path}.tag`);
   const tag = node.tag as FixtureTag;
   const control = tag === "a" || tag === "button";
   if (control) {
-    if (typeof node.key !== "string" || !keyPattern.test(node.key) || keys.has(node.key)) throw new TypeError(`${path}.key`);
+    if (typeof node.key !== "string" || !keyPattern.test(node.key) || keys.has(node.key))
+      throw new TypeError(`${path}.key`);
     keys.add(node.key);
   } else if (node.key !== undefined) throw new TypeError(`${path}.key`);
   for (const field of ["text", "ariaLabel", "title"] as const) {
     if (node[field] !== undefined && !isLabel(node[field])) throw new TypeError(`${path}.${field}`);
   }
-  if (node.role !== undefined && (typeof node.role !== "string" || !roles.has(node.role))) throw new TypeError(`${path}.role`);
+  if (node.role !== undefined && (typeof node.role !== "string" || !roles.has(node.role)))
+    throw new TypeError(`${path}.role`);
   if (node.role === "button" && !control) throw new TypeError(`${path}.role`);
   if (node.flags !== undefined) {
     if (!Array.isArray(node.flags) || node.flags.length > classFlags.size) throw new TypeError(`${path}.flags`);
@@ -367,7 +413,19 @@ function parseNode(value: unknown, path: string, keys: Set<string>, depth: numbe
   if (node.ariaCurrent !== undefined && node.ariaCurrent !== "page" && node.ariaCurrent !== "true") {
     throw new TypeError(`${path}.ariaCurrent`);
   }
-  for (const field of ["ariaDisabled", "ariaHidden", "disabled", "hidden", "inert", "dataPagination", "targetBlank", "targetOther", "download", "inForm", "svg"] as const) {
+  for (const field of [
+    "ariaDisabled",
+    "ariaHidden",
+    "disabled",
+    "hidden",
+    "inert",
+    "dataPagination",
+    "targetBlank",
+    "targetOther",
+    "download",
+    "inForm",
+    "svg",
+  ] as const) {
     if (node[field] !== undefined && node[field] !== true) throw new TypeError(`${path}.${field}`);
   }
   if (node.disabled === true && tag !== "button") throw new TypeError(`${path}.disabled`);
@@ -445,8 +503,11 @@ function parseRoute(value: unknown, path: string): Route {
   }
   if (typeof route.shape !== "string" || !shapes.has(route.shape)) throw new TypeError(`${path}.shape`);
   const shape = route.shape as RouteShape;
-  if (route.page !== undefined && (typeof route.page !== "number" || !Number.isInteger(route.page) ||
-      route.page < 0 || route.page > 999_999)) throw new TypeError(`${path}.page`);
+  if (
+    route.page !== undefined &&
+    (typeof route.page !== "number" || !Number.isInteger(route.page) || route.page < 0 || route.page > 999_999)
+  )
+    throw new TypeError(`${path}.page`);
   if (route.key !== undefined && (typeof route.key !== "string" || !pageKeySet.has(route.key))) {
     throw new TypeError(`${path}.key`);
   }

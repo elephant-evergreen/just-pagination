@@ -3,11 +3,7 @@ import { Readable } from "node:stream";
 import { mkdirSync, renameSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Window } from "happy-dom";
-import {
-  fixtureShapeDigest,
-  pageKeys,
-  sealFixture,
-} from "./fixture.ts";
+import { fixtureShapeDigest, pageKeys, sealFixture } from "./fixture.ts";
 import type {
   ClassFlag,
   Expected,
@@ -69,7 +65,7 @@ export class IntakeError extends Error {
 }
 
 export async function intakeRecord(value: unknown): Promise<IntakeResult> {
-  const record = isRecord(value) ? value as SourceRecord : undefined;
+  const record = isRecord(value) ? (value as SourceRecord) : undefined;
   if (!record) return { status: "unsupported", reason: "record" };
   if (record.skip === true) return { status: "skipped", reason: "marked" };
   if (typeof record.url !== "string" || typeof record.html !== "string") {
@@ -109,7 +105,7 @@ export async function intakeRecord(value: unknown): Promise<IntakeResult> {
       const destinations = expectedSource[direction];
       if (destinations === undefined) continue;
       for (const destination of destinations) {
-        const matches = links.filter(link => linkDestination(link, page) === destination);
+        const matches = links.filter((link) => linkDestination(link, page) === destination);
         if (matches.length === 0) return { status: "unsupported", reason: "expected-missing" };
         expectedAnchors.push(...matches);
       }
@@ -137,7 +133,7 @@ export async function intakeRecord(value: unknown): Promise<IntakeResult> {
       const rel = link.relList.contains("next") ? "next" : link.relList.contains("prev") ? "prev" : undefined;
       if (!rel) continue;
       const href = routes.routeFor(linkDestination(link, page));
-      if (href && !head.some(entry => entry.rel === rel && sameRoute(entry.href, href))) head.push({ rel, href });
+      if (href && !head.some((entry) => entry.rel === rel && sameRoute(entry.href, href))) head.push({ rel, href });
       if (head.length >= 4) break;
     }
     const payload = {
@@ -159,23 +155,68 @@ export async function intakeRecord(value: unknown): Promise<IntakeResult> {
   }
 }
 
-
 const inertAttributes = new Set([
-  "aria-current", "aria-disabled", "aria-hidden", "aria-label", "class", "data-pagination", "disabled", "download",
-  "hidden", "href", "inert", "rel", "role", "target", "title",
+  "aria-current",
+  "aria-disabled",
+  "aria-hidden",
+  "aria-label",
+  "class",
+  "data-pagination",
+  "disabled",
+  "download",
+  "hidden",
+  "href",
+  "inert",
+  "rel",
+  "role",
+  "target",
+  "title",
 ]);
 const inertRemovals = [
-  "script", "style", "iframe", "frame", "frameset", "object", "embed", "img", "picture", "source", "video", "audio",
-  "canvas", "base", "meta", "title", "template", "noscript", "input", "textarea", "select", "option", "optgroup",
+  "script",
+  "style",
+  "iframe",
+  "frame",
+  "frameset",
+  "object",
+  "embed",
+  "img",
+  "picture",
+  "source",
+  "video",
+  "audio",
+  "canvas",
+  "base",
+  "meta",
+  "title",
+  "template",
+  "noscript",
+  "input",
+  "textarea",
+  "select",
+  "option",
+  "optgroup",
 ];
 
 export async function inertHtml(html: string): Promise<string> {
   const rewriter = new HTMLRewriter();
   for (const selector of inertRemovals) {
-    rewriter.on(selector, { element(element) { element.remove(); } });
+    rewriter.on(selector, {
+      element(element) {
+        element.remove();
+      },
+    });
   }
-  rewriter.on("svg *", { element(element) { element.remove(); } });
-  rewriter.on("svg", { element(element) { element.setInnerContent(""); } });
+  rewriter.on("svg *", {
+    element(element) {
+      element.remove();
+    },
+  });
+  rewriter.on("svg", {
+    element(element) {
+      element.setInnerContent("");
+    },
+  });
   rewriter.on("link", {
     element(element) {
       const rel = (element.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
@@ -200,8 +241,7 @@ export async function inertHtml(html: string): Promise<string> {
   return rewriter.transform(new Response(html)).text();
 }
 
-function parseExpected(value: unknown, page: URL):
-  Record<Direction, string[] | undefined> | "invalid" | undefined {
+function parseExpected(value: unknown, page: URL): Record<Direction, string[] | undefined> | "invalid" | undefined {
   if (value === undefined) return;
   if (!isRecord(value)) return "invalid";
   const previous = parseExpectedValue(value.previous, page);
@@ -216,8 +256,8 @@ function parseExpectedValue(value: unknown, page: URL): string[] | undefined | n
   if (value === null) return [];
   if (typeof value === "string") return [normalizeDestination(value, page)];
   if (Array.isArray(value)) {
-    const values = value.map(item => typeof item === "string" ? normalizeDestination(item, page) : undefined);
-    if (values.some(item => item === undefined)) return null;
+    const values = value.map((item) => (typeof item === "string" ? normalizeDestination(item, page) : undefined));
+    if (values.some((item) => item === undefined)) return null;
     return [...new Set(values as string[])];
   }
   return null;
@@ -266,7 +306,7 @@ function selectRoots(document: Document, expectedAnchors: HTMLAnchorElement[]): 
     if (!isNumberedText(anchor.textContent)) continue;
     const group = anchor.parentElement;
     if (!group) continue;
-    const numbered = [...group.querySelectorAll("a[href]")].filter(link => isNumberedText(link.textContent));
+    const numbered = [...group.querySelectorAll("a[href]")].filter((link) => isNumberedText(link.textContent));
     if (numbered.length >= 3) add(scopeFor(group));
   }
   for (const anchor of expectedAnchors) {
@@ -274,16 +314,17 @@ function selectRoots(document: Document, expectedAnchors: HTMLAnchorElement[]): 
     for (let depth = 0; depth < 4 && element; depth++, element = element.parentElement) add(scopeFor(element));
   }
   const selected: Element[] = [];
-  const ranked = [...candidates].map(element => ({ element, score: rootScore(element) }))
-    .filter(entry => entry.score >= 0)
+  const ranked = [...candidates]
+    .map((element) => ({ element, score: rootScore(element) }))
+    .filter((entry) => entry.score >= 0)
     .sort((left, right) => right.score - left.score || controlCount(left.element) - controlCount(right.element));
   for (const { element } of ranked) {
-    if (selected.some(root => root.contains(element) || element.contains(root))) continue;
+    if (selected.some((root) => root.contains(element) || element.contains(root))) continue;
     selected.push(element);
     if (selected.length >= maxRoots) break;
   }
   for (const anchor of expectedAnchors) {
-    if (selected.some(root => root === anchor || root.contains(anchor))) continue;
+    if (selected.some((root) => root === anchor || root.contains(anchor))) continue;
     const extra = scopeFor(anchor);
     if (!extra) continue;
     for (let index = selected.length - 1; index >= 0; index--) {
@@ -306,9 +347,12 @@ function scopeFor(element: Element): Element | undefined {
     const controls = controlCount(current);
     if (controls < 1) continue;
     if (controls <= 96) fallback = current;
-    if (current.matches("nav,[role=navigation],ul,ol,[data-pagination]") ||
-        navWords.test(current.getAttribute("class") ?? "") ||
-        navWords.test(current.getAttribute("aria-label") ?? "")) return current;
+    if (
+      current.matches("nav,[role=navigation],ul,ol,[data-pagination]") ||
+      navWords.test(current.getAttribute("class") ?? "") ||
+      navWords.test(current.getAttribute("aria-label") ?? "")
+    )
+      return current;
   }
   return fallback;
 }
@@ -323,8 +367,9 @@ function rootScore(element: Element): number {
   if (element.matches("nav,[role=navigation]")) score += 10;
   if (element.querySelector("[aria-current=page],[aria-current=true]")) score += 8;
   if (element.querySelector("a[rel~=next],a[rel~=prev],a[rel~=previous]")) score += 8;
-  const numbered = [...element.querySelectorAll("a[href],button,[role=button]")]
-    .filter(control => isNumberedText(control.textContent)).length;
+  const numbered = [...element.querySelectorAll("a[href],button,[role=button]")].filter((control) =>
+    isNumberedText(control.textContent),
+  ).length;
   if (numbered >= 3) score += 10;
   if (element.closest("[role=grid],[role=tablist],dialog")) score -= 30;
   if (controls > 128) score -= 10;
@@ -350,12 +395,15 @@ type SanitizeContext = {
 
 function sanitizeNode(element: Element, context: SanitizeContext): FixtureNode | null {
   if (context.nodeCount++ > maxNodes) throw new IntakeError("nodes");
-  if (element.matches("script,style,template,noscript,iframe,object,embed,img,picture,video,audio,canvas,svg")) return null;
+  if (element.matches("script,style,template,noscript,iframe,object,embed,img,picture,video,audio,canvas,svg"))
+    return null;
   if (element.matches("a:not([href])")) return null;
   if (element.matches(controlSelector)) return sanitizeControl(element, context);
   const tag = containerTag(element);
   if (!tag) return null;
-  const children = [...element.children].map(child => sanitizeNode(child, context)).filter((child): child is FixtureNode => child !== null);
+  const children = [...element.children]
+    .map((child) => sanitizeNode(child, context))
+    .filter((child): child is FixtureNode => child !== null);
   const text = children.length ? undefined : containerText(element);
   const flags = classFlagsOf(element);
   const ariaLabel = canonicalLabel(element.getAttribute("aria-label"), "attribute");
@@ -366,8 +414,19 @@ function sanitizeNode(element: Element, context: SanitizeContext): FixtureNode |
   const ariaDisabled = element.getAttribute("aria-disabled") === "true" || undefined;
   const ariaCurrent = element.getAttribute("aria-current");
   const dataPagination = element.hasAttribute("data-pagination") || undefined;
-  if (!children.length && !text && !flags.length && !ariaLabel && !role && !hidden && !inert && !ariaHidden &&
-      !ariaDisabled && !ariaCurrent && !dataPagination) {
+  if (
+    !children.length &&
+    !text &&
+    !flags.length &&
+    !ariaLabel &&
+    !role &&
+    !hidden &&
+    !inert &&
+    !ariaHidden &&
+    !ariaDisabled &&
+    !ariaCurrent &&
+    !dataPagination
+  ) {
     return null;
   }
   return {
@@ -387,24 +446,29 @@ function sanitizeNode(element: Element, context: SanitizeContext): FixtureNode |
 }
 
 function sanitizeControl(element: Element, context: SanitizeContext): FixtureNode | null {
-  const anchor = element.matches("a[href]") ? element as HTMLAnchorElement : undefined;
+  const anchor = element.matches("a[href]") ? (element as HTMLAnchorElement) : undefined;
   const rawText = element.textContent ?? "";
   const rawLabel = canonicalLabel(rawText, "text");
   const ariaLabel = canonicalLabel(element.getAttribute("aria-label"), "attribute");
   const title = canonicalLabel(element.getAttribute("title"), "attribute");
   const svg = Boolean(element.querySelector("svg"));
-  const text = rawLabel ?? (svg ? "icon" as const : undefined);
+  const text = rawLabel ?? (svg ? ("icon" as const) : undefined);
   const href = anchor ? context.routes.routeFor(linkDestination(anchor, context.page)) : undefined;
-  const fixtureKey = context.keys.get(element) ?? (() => {
-    const assigned = `c${++context.keyCount}`;
-    context.keys.set(element, assigned);
-    return assigned;
-  })();
+  const fixtureKey =
+    context.keys.get(element) ??
+    (() => {
+      const assigned = `c${++context.keyCount}`;
+      context.keys.set(element, assigned);
+      return assigned;
+    })();
   const flags = classFlagsOf(element);
-  const role = element.matches("[role=button]") || element.matches("button") ? "button" as const : undefined;
-  const rel = (element.getAttribute("rel") ?? "").toLowerCase().split(/\s+/)
-    .flatMap(value => value === "prev" || value === "previous" ? ["prev" as const] :
-      value === "next" ? ["next" as const] : []);
+  const role = element.matches("[role=button]") || element.matches("button") ? ("button" as const) : undefined;
+  const rel = (element.getAttribute("rel") ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .flatMap((value) =>
+      value === "prev" || value === "previous" ? ["prev" as const] : value === "next" ? ["next" as const] : [],
+    );
   const ariaCurrent = element.getAttribute("aria-current");
   return {
     tag: element.matches("a") ? "a" : "button",
@@ -422,8 +486,11 @@ function sanitizeControl(element: Element, context: SanitizeContext): FixtureNod
     ...(element.getAttribute("aria-hidden") === "true" ? { ariaHidden: true as const } : {}),
     ...(rel.length ? { rel: [...new Set(rel)] } : {}),
     ...(href === undefined ? {} : { href }),
-    ...(element.getAttribute("target") === "_blank" ? { targetBlank: true as const } :
-      element.getAttribute("target") && element.getAttribute("target") !== "_self" ? { targetOther: true as const } : {}),
+    ...(element.getAttribute("target") === "_blank"
+      ? { targetBlank: true as const }
+      : element.getAttribute("target") && element.getAttribute("target") !== "_self"
+        ? { targetOther: true as const }
+        : {}),
     ...(element.hasAttribute("download") ? { download: true as const } : {}),
     ...(element.closest("form") ? { inForm: true as const } : {}),
     ...(svg ? { svg: true as const } : {}),
@@ -432,7 +499,26 @@ function sanitizeControl(element: Element, context: SanitizeContext): FixtureNod
 
 function containerTag(element: Element): FixtureNode["tag"] | undefined {
   const tag = element.tagName.toLowerCase();
-  if (["a", "button", "div", "form", "li", "main", "nav", "ol", "p", "section", "span", "table", "tbody", "td", "tr", "ul"].includes(tag)) {
+  if (
+    [
+      "a",
+      "button",
+      "div",
+      "form",
+      "li",
+      "main",
+      "nav",
+      "ol",
+      "p",
+      "section",
+      "span",
+      "table",
+      "tbody",
+      "td",
+      "tr",
+      "ul",
+    ].includes(tag)
+  ) {
     return tag as FixtureNode["tag"];
   }
   if (element.children.length) return "div";
@@ -447,16 +533,23 @@ function containerText(element: Element): Label | undefined {
 }
 
 function isHidden(element: Element): boolean {
-  return element.hasAttribute("hidden") || hiddenClass.test(element.getAttribute("class") ?? "") ||
-    hiddenStyle.test(element.getAttribute("style") ?? "");
+  return (
+    element.hasAttribute("hidden") ||
+    hiddenClass.test(element.getAttribute("class") ?? "") ||
+    hiddenStyle.test(element.getAttribute("style") ?? "")
+  );
 }
 
 function classFlagsOf(element: Element): ClassFlag[] {
   const raw = element.getAttribute("class") ?? "";
   const flags: ClassFlag[] = [];
   if (navWords.test(raw)) flags.push("pagination");
-  if (currentClass.test(raw) || /^current page,/i.test(element.getAttribute("aria-label") ?? "") ||
-      /current page/i.test(element.getAttribute("aria-label") ?? "")) flags.push("current");
+  if (
+    currentClass.test(raw) ||
+    /^current page,/i.test(element.getAttribute("aria-label") ?? "") ||
+    /current page/i.test(element.getAttribute("aria-label") ?? "")
+  )
+    flags.push("current");
   if (disabledClass.test(raw)) flags.push("disabled");
   return flags;
 }
@@ -487,7 +580,7 @@ function expectedKeys(
       keys.add(key);
       captured.add(destination);
     }
-    if (destinations.some(destination => !captured.has(destination))) return;
+    if (destinations.some((destination) => !captured.has(destination))) return;
     expected[direction] = [...keys].sort((left, right) => Number(left.slice(1)) - Number(right.slice(1)));
   }
   return expected;
@@ -504,7 +597,8 @@ function canonicalLabel(raw: string | null | undefined, source: "text" | "attrib
     .trim();
   for (const value of [text, stripped]) {
     if (!value) continue;
-    const currentNumber = value.match(/^(?:current page,?\s*)?(\d{1,6})\s*\(\s*current\s*\)$/i)?.[1] ??
+    const currentNumber =
+      value.match(/^(?:current page,?\s*)?(\d{1,6})\s*\(\s*current\s*\)$/i)?.[1] ??
       value.match(/^current page,?\s*(\d{1,6})$/i)?.[1] ??
       value.match(/^page\s+(\d{1,6}),?\s*current page$/i)?.[1];
     if (currentNumber) return `current#${Number(currentNumber)}`;
@@ -611,12 +705,17 @@ class RouteMap {
   }
 }
 
-const PAGE_KEYS = new Map<string, PageKey>(pageKeys.map(key => [key, key]));
+const PAGE_KEYS = new Map<string, PageKey>(pageKeys.map((key) => [key, key]));
 
 function sameRoute(left: Route, right: Route): boolean {
-  return left.site === right.site && left.route === right.route && left.shape === right.shape &&
-    left.page === right.page && left.key === right.key &&
-    JSON.stringify(left.filters ?? []) === JSON.stringify(right.filters ?? []);
+  return (
+    left.site === right.site &&
+    left.route === right.route &&
+    left.shape === right.shape &&
+    left.page === right.page &&
+    left.key === right.key &&
+    JSON.stringify(left.filters ?? []) === JSON.stringify(right.filters ?? [])
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -629,14 +728,16 @@ async function main() {
   const input = option("input");
   const output = option("out");
   if (!input || !output) {
-    console.error("Usage: bun test/pagination-eval/intake.ts --input <source.jsonl> --out <fixtures.jsonl> [--limit <n>]");
+    console.error(
+      "Usage: bun test/pagination-eval/intake.ts --input <source.jsonl> --out <fixtures.jsonl> [--limit <n>]",
+    );
     process.exit(2);
   }
   if (resolve(input) === resolve(output)) {
     console.error("The fixture output must differ from the source input.");
     process.exit(2);
   }
-  if (!await Bun.file(input).exists()) {
+  if (!(await Bun.file(input).exists())) {
     console.error("The source JSONL was not found.");
     process.exit(2);
   }
@@ -708,7 +809,9 @@ async function main() {
     await writer.end();
     renameSync(temporary, resolve(output));
   } catch {
-    try { await writer.end(); } catch {}
+    try {
+      await writer.end();
+    } catch {}
     rmSync(temporary, { force: true });
     console.error("Intake failed before a fixture set was written.");
     process.exitCode = 1;

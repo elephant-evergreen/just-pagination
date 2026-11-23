@@ -28,7 +28,7 @@ export async function verifyKey(key: string): Promise<ConnectionResult> {
     if (!response.ok) return "unavailable";
     const data: unknown = await response.json();
     if (!isRecord(data) || !Array.isArray(data.models)) return "unavailable";
-    return data.models.some(entry => isRecord(entry) && entry.name === model) ? "connected" : "no-model";
+    return data.models.some((entry) => isRecord(entry) && entry.name === model) ? "connected" : "no-model";
   } catch {
     return "unavailable";
   }
@@ -36,15 +36,23 @@ export async function verifyKey(key: string): Promise<ConnectionResult> {
 
 export function parseClassification(value: unknown): Classification | undefined {
   if (!isRecord(value) || typeof value.hasCurrent !== "boolean") return;
-  if (!Array.isArray(value.candidates) || value.candidates.length < 1 || value.candidates.length > maxCandidates) return;
+  if (!Array.isArray(value.candidates) || value.candidates.length < 1 || value.candidates.length > maxCandidates)
+    return;
   if (!Array.isArray(value.needed)) return;
-  const needed = directions.filter(direction => value.needed instanceof Array && value.needed.includes(direction));
+  const needed = directions.filter((direction) => value.needed instanceof Array && value.needed.includes(direction));
   if (!needed.length) return;
   const candidates: Classification["candidates"] = [];
   for (const candidate of value.candidates) {
     if (!isRecord(candidate)) return;
     const { id, position, relation, kind, cue } = candidate;
-    if (id !== candidates.length + 1 || typeof position !== "number" || !Number.isInteger(position) || position < 0 || position >= 32) return;
+    if (
+      id !== candidates.length + 1 ||
+      typeof position !== "number" ||
+      !Number.isInteger(position) ||
+      position < 0 ||
+      position >= 32
+    )
+      return;
     if ((relation !== -1 && relation !== 0 && relation !== 1) || (kind !== "link" && kind !== "button")) return;
     if (cue !== "previous" && cue !== "next" && cue !== "unknown") return;
     candidates.push({ id, position, relation, kind, cue });
@@ -59,7 +67,9 @@ export async function classify(key: string, input: Classification): Promise<Deci
     for (const candidate of input.candidates) criteria["c" + candidate.id] = "Control " + candidate.id;
     questions[direction] = {
       type: "choice",
-      instructions: "Which control moves one page " + (direction === "next" ? "forward" : "back") +
+      instructions:
+        "Which control moves one page " +
+        (direction === "next" ? "forward" : "back") +
         " in the same list? A relation of -1 or 1 indicates the side of the current page. " +
         "Use none when there is no clear arrow or adjacent-page evidence. Never pick a jump to a distant page.",
       criteria,
@@ -67,7 +77,9 @@ export async function classify(key: string, input: Classification): Promise<Deci
   }
   try {
     const response = await request(key, "systemone", {
-      model, state: { has_current: input.hasCurrent, controls: input.candidates }, questions,
+      model,
+      state: { has_current: input.hasCurrent, controls: input.candidates },
+      questions,
     });
     if (!response.ok) return {};
     const body: unknown = await response.json();
@@ -78,13 +90,20 @@ export async function classify(key: string, input: Classification): Promise<Deci
       if (!isRecord(answer) || answer.type !== "choice" || typeof answer.choice !== "string") continue;
       if (!isRecord(answer.probabilities)) continue;
       const probability = answer.probabilities[answer.choice];
-      if (typeof probability !== "number" || probability < .92 || probability > 1 ||
-          typeof answer.confidence !== "number" || answer.confidence < .8 || answer.confidence > 1) continue;
+      if (
+        typeof probability !== "number" ||
+        probability < 0.92 ||
+        probability > 1 ||
+        typeof answer.confidence !== "number" ||
+        answer.confidence < 0.8 ||
+        answer.confidence > 1
+      )
+        continue;
       if (answer.choice === "none") {
         selected[direction] = null;
         continue;
       }
-      const candidate = input.candidates.find(option => "c" + option.id === answer.choice);
+      const candidate = input.candidates.find((option) => "c" + option.id === answer.choice);
       if (!candidate || (candidate.cue !== "unknown" && candidate.cue !== direction)) continue;
       if (candidate.relation === (direction === "next" ? -1 : 1)) continue;
       selected[direction] = candidate.id;
