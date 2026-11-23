@@ -629,7 +629,7 @@ async function main() {
   const input = option("input");
   const output = option("out");
   if (!input || !output) {
-    console.error("Usage: bun tools/pagination-eval/intake.ts --input <source.jsonl> --out <fixtures.jsonl> [--limit <n>]");
+    console.error("Usage: bun test/pagination-eval/intake.ts --input <source.jsonl> --out <fixtures.jsonl> [--limit <n>]");
     process.exit(2);
   }
   if (resolve(input) === resolve(output)) {

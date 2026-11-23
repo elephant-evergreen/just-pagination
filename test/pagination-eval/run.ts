@@ -38,7 +38,7 @@ const directions: Direction[] = ["previous", "next"];
 
 const fixturesPath = option("fixtures");
 if (!fixturesPath) {
-  console.error("Usage: bun tools/pagination-eval/run.ts --fixtures <fixtures.jsonl> [--report <report.json>] [--regressions <failed.jsonl>] [--limit <n>]");
+  console.error("Usage: bun test/pagination-eval/run.ts --fixtures <fixtures.jsonl> [--report <report.json>] [--regressions <failed.jsonl>] [--limit <n>]");
   process.exit(2);
 }
 const reportPath = option("report");

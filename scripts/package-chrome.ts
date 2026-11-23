@@ -3,7 +3,7 @@ import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, renameSyn
 import { dirname, join, relative } from "node:path";
 import { releaseTag, releaseVersion } from "./release.ts";
 
-const root = import.meta.dir;
+const root = dirname(import.meta.dir);
 const dist = join(root, "dist");
 const manifest = await Bun.file(join(dist, "manifest.json")).json();
 const version = releaseVersion(manifest);

@@ -22,4 +22,4 @@ run = ["bun check -p tsconfig.tools.json", "bun test ./test"]
 
 [tasks.package]
 depends = ["check"]
-run = "bun package-chrome.ts"
+run = "bun scripts/package-chrome.ts"

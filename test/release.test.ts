@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { releaseTag, releaseVersion } from "../release.ts";
+import { releaseTag, releaseVersion } from "../scripts/release.ts";
 
 function manifest(version: unknown, manifestVersion: unknown = 3) {
   return { manifest_version: manifestVersion, version };

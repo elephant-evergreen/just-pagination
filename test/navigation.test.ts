@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Window } from "happy-dom";
-import { patchSelectorEngine } from "../tools/pagination-eval/harness.ts";
+import { patchSelectorEngine } from "./pagination-eval/harness.ts";
 import type { Direction } from "../src/protocol.ts";
 
 type Page = {

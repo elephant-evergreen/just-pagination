@@ -3,10 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Window } from "happy-dom";
-import { inertHtml, intakeRecord } from "../tools/pagination-eval/intake.ts";
-import { fixtureShapeDigest, parseFixture, sealFixture } from "../tools/pagination-eval/fixture.ts";
-import type { FixturePayload } from "../tools/pagination-eval/fixture.ts";
-import { evaluateFixture } from "../tools/pagination-eval/harness.ts";
+import { inertHtml, intakeRecord } from "./pagination-eval/intake.ts";
+import { fixtureShapeDigest, parseFixture, sealFixture } from "./pagination-eval/fixture.ts";
+import type { FixturePayload } from "./pagination-eval/fixture.ts";
+import { evaluateFixture } from "./pagination-eval/harness.ts";
 
 const root = join(import.meta.dir, "..");
 const temporaryDirectories: string[] = [];
@@ -131,7 +131,7 @@ describe("sanitized intake", () => {
     const fixturesPath = join(directory, "fixtures.jsonl");
     const intake = Bun.spawnSync([
       process.execPath,
-      "tools/pagination-eval/intake.ts",
+      "test/pagination-eval/intake.ts",
       "--input",
       sourcePath,
       "--out",
@@ -143,7 +143,7 @@ describe("sanitized intake", () => {
     expect(normalized).not.toContain("source.invalid");
     const evaluation = Bun.spawnSync([
       process.execPath,
-      "tools/pagination-eval/run.ts",
+      "test/pagination-eval/run.ts",
       "--fixtures",
       fixturesPath,
     ], { cwd: root, stdout: "pipe", stderr: "pipe" });
@@ -222,7 +222,7 @@ describe("offline evaluation", () => {
     await Bun.write(fixturesPath, JSON.stringify(fixture) + "\n");
     const result = Bun.spawnSync([
       process.execPath,
-      "tools/pagination-eval/run.ts",
+      "test/pagination-eval/run.ts",
       "--fixtures",
       fixturesPath,
       "--regressions",
