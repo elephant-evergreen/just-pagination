@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+if ! mise exec -- bun fmt --check >/dev/null; then
+  printf '%s\n' 'pre-push: formatting differs. Run `mise run fmt` and commit the result.' >&2
+  exit 1
+fi

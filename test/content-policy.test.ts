@@ -15,11 +15,21 @@ class FakeElement {
     this.ariaLabel = ariaLabel;
   }
 
-  closest() { return null; }
-  getClientRects() { return [{}]; }
-  getAttribute(name: string) { return name === "aria-label" ? this.ariaLabel ?? null : this.attributes[name] ?? null; }
-  hasAttribute() { return false; }
-  matches() { return true; }
+  closest() {
+    return null;
+  }
+  getClientRects() {
+    return [{}];
+  }
+  getAttribute(name: string) {
+    return name === "aria-label" ? (this.ariaLabel ?? null) : (this.attributes[name] ?? null);
+  }
+  hasAttribute() {
+    return false;
+  }
+  matches() {
+    return true;
+  }
 }
 
 class FakeAnchor extends FakeElement {
@@ -58,7 +68,9 @@ function installPage(href: string) {
   };
   const windowStub = {
     addEventListener() {},
-    getSelection() { return undefined; },
+    getSelection() {
+      return undefined;
+    },
     setTimeout: globalThis.setTimeout,
   };
   Object.defineProperties(globalThis, {
@@ -91,7 +103,8 @@ async function policy(href: string): Promise<Policy> {
   const js = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
   const end = js.lastIndexOf("\n})();");
   if (end < 0) throw new Error("Could not expose content policy");
-  const instrumented = js.slice(0, end) +
+  const instrumented =
+    js.slice(0, end) +
     "\n  Object.assign(globalThis, { __justPaginationPolicy: { inferredPage, routeEvidence, pageDirection, automatic, activationEvidence } });" +
     js.slice(end);
   new Function(instrumented)();
@@ -101,8 +114,19 @@ async function policy(href: string): Promise<Policy> {
 const group = (currentPage?: number): Group => ({ currentPage });
 
 afterEach(() => {
-  for (const name of ["location", "document", "window", "chrome", "MutationObserver", "HTMLElement",
-    "HTMLAnchorElement", "HTMLButtonElement", "HTMLVideoElement", "Element", "getComputedStyle"]) {
+  for (const name of [
+    "location",
+    "document",
+    "window",
+    "chrome",
+    "MutationObserver",
+    "HTMLElement",
+    "HTMLAnchorElement",
+    "HTMLButtonElement",
+    "HTMLVideoElement",
+    "Element",
+    "getComputedStyle",
+  ]) {
     Reflect.deleteProperty(globalThis, name);
   }
   Reflect.deleteProperty(globalThis, "justPaginationInstalled");
@@ -118,9 +142,41 @@ test("known same-list routes stay directional in both directions", async () => {
   await policy("https://example.test/list/2");
   expect(content.pageDirection(new FakeAnchor("https://example.test/list/3", "3"), group(2))).toBe("next");
   expect(content.pageDirection(new FakeAnchor("https://example.test/list/1", "1"), group(2))).toBe("previous");
-  expect(content.pageDirection(new FakeAnchor("https://example.test/list", "1", undefined, "prev"), group(2))).toBe("previous");
-  expect(content.pageDirection(new FakeAnchor("https://example.test/other", "1", undefined, "prev"), group(2))).toBeUndefined();
+  expect(content.pageDirection(new FakeAnchor("https://example.test/list", "1", undefined, "prev"), group(2))).toBe(
+    "previous",
+  );
+  expect(
+    content.pageDirection(new FakeAnchor("https://example.test/other", "1", undefined, "prev"), group(2)),
+  ).toBeUndefined();
   expect(content.pageDirection(new FakeAnchor("https://example.test/workflow/3", "3"), group(2))).toBeUndefined();
+});
+
+test("a page segment without a separator routes turns and recognizes a detail URL as the first page", async () => {
+  const content = await policy("https://example.test/gallery/group/page2/");
+  const second = group(2);
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page3/", "3"), second)).toBe("next");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page1/", "1"), second)).toBe(
+    "previous",
+  );
+  expect(
+    content.pageDirection(new FakeAnchor("https://example.test/gallery/group/", "1", undefined, "prev"), second),
+  ).toBe("previous");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/other/group/page3/", "3"), second)).toBeUndefined();
+
+  // 一覧の先頭を表示する詳細URLからは、直後のページだけを同じ一覧と見なします。
+  await policy("https://example.test/gallery/group/with/55661721797");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page2/", "2"), group(1))).toBe(
+    "next",
+  );
+  expect(
+    content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page3/", "3"), group(1)),
+  ).toBeUndefined();
+  expect(
+    content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page2/", "2"), group(3)),
+  ).toBeUndefined();
+  expect(
+    content.pageDirection(new FakeAnchor("https://example.test/gallery/other/page2/", "2"), group(1)),
+  ).toBeUndefined();
 });
 
 test("infers a missing current page from a numbered path series", async () => {
@@ -144,15 +200,25 @@ test("infers a missing current page from a numbered path series", async () => {
   expect(content.inferredPage(two, new URL("https://example.test/list/2"))).toBe(2);
 
   await policy("https://example.test/list/5");
-  expect(content.inferredPage([
-    new FakeAnchor("https://example.test/list/4", "Previous", undefined, "prev"),
-    new FakeAnchor("https://example.test/list/6", "Next", undefined, "next"),
-    new FakeAnchor("https://example.test/list/20", "20"),
-  ], new URL("https://example.test/list/5"))).toBeUndefined();
-  expect(content.inferredPage([
-    new FakeAnchor("https://example.test/list/4", "4", undefined, "prev"),
-    new FakeAnchor("https://example.test/list/6", "6", undefined, "next"),
-  ], new URL("https://example.test/list/5"))).toBeUndefined();
+  expect(
+    content.inferredPage(
+      [
+        new FakeAnchor("https://example.test/list/4", "Previous", undefined, "prev"),
+        new FakeAnchor("https://example.test/list/6", "Next", undefined, "next"),
+        new FakeAnchor("https://example.test/list/20", "20"),
+      ],
+      new URL("https://example.test/list/5"),
+    ),
+  ).toBeUndefined();
+  expect(
+    content.inferredPage(
+      [
+        new FakeAnchor("https://example.test/list/4", "4", undefined, "prev"),
+        new FakeAnchor("https://example.test/list/6", "6", undefined, "next"),
+      ],
+      new URL("https://example.test/list/5"),
+    ),
+  ).toBeUndefined();
 });
 
 test("buttons need numbered or routed pagination evidence", async () => {
@@ -171,36 +237,45 @@ test("buttons need numbered or routed pagination evidence", async () => {
 
 test("route evidence stays on one page list and ignores unrelated links", async () => {
   const content = await policy("https://example.test/list");
-  expect(content.routeEvidence([
-    new FakeAnchor("https://example.test/list?page=1", "1"),
-    new FakeAnchor("https://example.test/list?page=2", "2"),
-  ])).toBe(true);
-  expect(content.routeEvidence([
-    new FakeAnchor("https://example.test/about", "About"),
-    new FakeAnchor("https://example.test/contact", "Contact"),
-  ])).toBe(false);
-  expect(content.routeEvidence([
-    new FakeAnchor("https://example.test/list?page=1", "1"),
-    new FakeAnchor("https://example.test/other?page=2", "2"),
-  ])).toBe(false);
-  expect(content.routeEvidence([
-    new FakeAnchor("https://example.test/other?page=1", "1"),
-    new FakeAnchor("https://example.test/other?page=2", "2"),
-  ])).toBe(false);
+  expect(
+    content.routeEvidence([
+      new FakeAnchor("https://example.test/list?page=1", "1"),
+      new FakeAnchor("https://example.test/list?page=2", "2"),
+    ]),
+  ).toBe(true);
+  expect(
+    content.routeEvidence([
+      new FakeAnchor("https://example.test/about", "About"),
+      new FakeAnchor("https://example.test/contact", "Contact"),
+    ]),
+  ).toBe(false);
+  expect(
+    content.routeEvidence([
+      new FakeAnchor("https://example.test/list?page=1", "1"),
+      new FakeAnchor("https://example.test/other?page=2", "2"),
+    ]),
+  ).toBe(false);
+  expect(
+    content.routeEvidence([
+      new FakeAnchor("https://example.test/other?page=1", "1"),
+      new FakeAnchor("https://example.test/other?page=2", "2"),
+    ]),
+  ).toBe(false);
 });
 
 test("keyboard turns require trusted input and fresh eligibility", () => {
-  expect(source).toContain('window.addEventListener("keydown", handleKeydown, keyOptions)');
-  const keydown = source.slice(source.indexOf("function handleKeydown("));
+  const compact = source.replace(/\s+/g, "");
+  expect(compact).toContain('window.addEventListener("keydown",handleKeydown,keyOptions)');
+  const keydown = compact.slice(compact.indexOf("functionhandleKeydown("));
   const trusted = keydown.indexOf("!event.isTrusted");
   const revalidate = keydown.indexOf("eligibleAtActuation(direction");
   const click = keydown.indexOf("target.click()");
   expect(trusted).toBeGreaterThan(-1);
   expect(revalidate).toBeGreaterThan(trusted);
   expect(click).toBeGreaterThan(revalidate);
-  expect(source).toContain("const fresh = inspect();");
-  expect(source).toContain("currentPage !== undefined || routeEvidence(controls, currentPage)");
-  expect(source).toContain("found.candidates.length > 8");
-  expect(source).toContain("label(control).slice(0, 4)");
-  expect(source).toContain("innerHTML.slice(0, 512)");
+  expect(compact).toContain("constfresh=inspect();");
+  expect(compact).toContain("currentPage!==undefined||routeEvidence(controls,currentPage)");
+  expect(compact).toContain("found.candidates.length>8");
+  expect(compact).toContain("label(control).slice(0,4)");
+  expect(compact).toContain("innerHTML.slice(0,512)");
 });

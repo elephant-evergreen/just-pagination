@@ -16,7 +16,7 @@ let busy = false;
 let address = "";
 
 async function readSite() {
-  const result = await chrome.runtime.sendMessage({ type: "site-status", url: address }) as SiteInfo | null;
+  const result = (await chrome.runtime.sendMessage({ type: "site-status", url: address })) as SiteInfo | null;
   if (!result) throw new Error();
   info = result;
 }
@@ -50,7 +50,8 @@ site.addEventListener("click", async () => {
   busy = true;
   render();
   try {
-    if (await chrome.runtime.sendMessage({ type: "set-site-disabled", host: info.host, disabled }) !== true) throw new Error();
+    if ((await chrome.runtime.sendMessage({ type: "set-site-disabled", host: info.host, disabled })) !== true)
+      throw new Error();
     info.status = disabled ? "disabled" : "ready";
     await readSite().catch(() => {});
   } catch {

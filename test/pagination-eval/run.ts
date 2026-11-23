@@ -38,7 +38,9 @@ const directions: Direction[] = ["previous", "next"];
 
 const fixturesPath = option("fixtures");
 if (!fixturesPath) {
-  console.error("Usage: bun tools/pagination-eval/run.ts --fixtures <fixtures.jsonl> [--report <report.json>] [--regressions <failed.jsonl>] [--limit <n>]");
+  console.error(
+    "Usage: bun test/pagination-eval/run.ts --fixtures <fixtures.jsonl> [--report <report.json>] [--regressions <failed.jsonl>] [--limit <n>]",
+  );
   process.exit(2);
 }
 const reportPath = option("report");
@@ -110,7 +112,7 @@ try {
       shapes.add(shape);
       summary.uniqueShapes = shapes.size;
     }
-    const labeled = directions.filter(direction => fixture.expected[direction] !== undefined);
+    const labeled = directions.filter((direction) => fixture.expected[direction] !== undefined);
     if (labeled.length === 0) {
       summary.skipped++;
       reason("unlabeled");
@@ -173,19 +175,27 @@ try {
 if (completed) {
   if (reportPath) {
     try {
-      await Bun.write(reportPath, JSON.stringify({
-        version: 1,
-        summary,
-        failures,
-        omittedFailures: Math.max(0, summary.failedCases - failures.length),
-      }, null, 2) + "\n");
+      await Bun.write(
+        reportPath,
+        JSON.stringify(
+          {
+            version: 1,
+            summary,
+            failures,
+            omittedFailures: Math.max(0, summary.failedCases - failures.length),
+          },
+          null,
+          2,
+        ) + "\n",
+      );
     } catch {
       console.error("The report could not be written.");
       process.exitCode = 1;
     }
   }
   console.log(JSON.stringify(summary, null, 2));
-  if (summary.unsupported || summary.mismatches || summary.passedCases + summary.failedCases === 0) process.exitCode = 1;
+  if (summary.unsupported || summary.mismatches || summary.passedCases + summary.failedCases === 0)
+    process.exitCode = 1;
 }
 
 function option(name: string): string | undefined {

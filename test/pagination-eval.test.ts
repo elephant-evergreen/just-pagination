@@ -3,10 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Window } from "happy-dom";
-import { inertHtml, intakeRecord } from "../tools/pagination-eval/intake.ts";
-import { fixtureShapeDigest, parseFixture, sealFixture } from "../tools/pagination-eval/fixture.ts";
-import type { FixturePayload } from "../tools/pagination-eval/fixture.ts";
-import { evaluateFixture } from "../tools/pagination-eval/harness.ts";
+import { inertHtml, intakeRecord } from "./pagination-eval/intake.ts";
+import { fixtureShapeDigest, parseFixture, sealFixture } from "./pagination-eval/fixture.ts";
+import type { FixturePayload } from "./pagination-eval/fixture.ts";
+import { evaluateFixture } from "./pagination-eval/harness.ts";
 
 const root = join(import.meta.dir, "..");
 const temporaryDirectories: string[] = [];
@@ -101,7 +101,6 @@ describe("sanitized intake", () => {
     expect(evaluated.fallbackDirections).toStrictEqual([]);
   });
 
-
   test("runs the sanitized intake and evaluator CLI end to end without source leakage", async () => {
     const directory = mkdtempSync(join(tmpdir(), "just-pagination-eval-"));
     temporaryDirectories.push(directory);
@@ -122,31 +121,29 @@ describe("sanitized intake", () => {
     nav.append(previous, current, next);
     document.body.append(nav);
     const sourcePath = join(directory, "source.jsonl");
-    await Bun.write(sourcePath, JSON.stringify({
-      url: "https://source.invalid/list?page=2",
-      html: document.documentElement.outerHTML,
-      expected: { previous: "/list?page=1", next: "/list?page=3" },
-    }) + "\n");
+    await Bun.write(
+      sourcePath,
+      JSON.stringify({
+        url: "https://source.invalid/list?page=2",
+        html: document.documentElement.outerHTML,
+        expected: { previous: "/list?page=1", next: "/list?page=3" },
+      }) + "\n",
+    );
     source.happyDOM.close();
     const fixturesPath = join(directory, "fixtures.jsonl");
-    const intake = Bun.spawnSync([
-      process.execPath,
-      "tools/pagination-eval/intake.ts",
-      "--input",
-      sourcePath,
-      "--out",
-      fixturesPath,
-    ], { cwd: root, stdout: "pipe", stderr: "pipe" });
+    const intake = Bun.spawnSync(
+      [process.execPath, "test/pagination-eval/intake.ts", "--input", sourcePath, "--out", fixturesPath],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
     expect(intake.exitCode).toBe(0);
     const normalized = await Bun.file(fixturesPath).text();
     expect(normalized).not.toContain("BrandOne");
     expect(normalized).not.toContain("source.invalid");
-    const evaluation = Bun.spawnSync([
-      process.execPath,
-      "tools/pagination-eval/run.ts",
-      "--fixtures",
-      fixturesPath,
-    ], { cwd: root, stdout: "pipe", stderr: "pipe" });
+    const evaluation = Bun.spawnSync([process.execPath, "test/pagination-eval/run.ts", "--fixtures", fixturesPath], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     expect(evaluation.exitCode).toBe(0);
     expect(evaluation.stdout.toString()).toContain('"passedCases": 1');
   });
@@ -182,8 +179,13 @@ describe("sanitized intake", () => {
 describe("offline evaluation", () => {
   test("runs the production candidate selection against every normalized fixture", async () => {
     const text = await Bun.file(join(root, "test/fixtures/pagination-eval/cases.jsonl")).text();
-    const fixtures = await Promise.all(text.trim().split("\n").map(async line => parseFixture(JSON.parse(line))));
-    expect(new Set(fixtures.map(fixture => fixture.id)).size).toBe(fixtures.length);
+    const fixtures = await Promise.all(
+      text
+        .trim()
+        .split("\n")
+        .map(async (line) => parseFixture(JSON.parse(line))),
+    );
+    expect(new Set(fixtures.map((fixture) => fixture.id)).size).toBe(fixtures.length);
     let fallbackCases = 0;
     for (const fixture of fixtures) {
       const evaluated = await evaluateFixture(fixture);
@@ -203,10 +205,12 @@ describe("offline evaluation", () => {
   test("rejects fixtures that could carry raw text or non-example routes", async () => {
     const fixture = await sealFixture(baseFixture());
     await expect(parseFixture({ ...fixture, body: [{ tag: "div", text: "BrandOne" }] })).rejects.toThrow();
-    await expect(parseFixture({
-      ...fixture,
-      url: { site: "other", route: 1, shape: "query", page: 2, key: "page" },
-    })).rejects.toThrow();
+    await expect(
+      parseFixture({
+        ...fixture,
+        url: { site: "other", route: 1, shape: "query", page: 2, key: "page" },
+      }),
+    ).rejects.toThrow();
     await expect(parseFixture({ ...fixture, extra: "value" })).rejects.toThrow();
   });
 
@@ -220,14 +224,10 @@ describe("offline evaluation", () => {
     const fixturesPath = join(directory, "fixtures.jsonl");
     const regressionsPath = join(directory, "regressions.jsonl");
     await Bun.write(fixturesPath, JSON.stringify(fixture) + "\n");
-    const result = Bun.spawnSync([
-      process.execPath,
-      "tools/pagination-eval/run.ts",
-      "--fixtures",
-      fixturesPath,
-      "--regressions",
-      regressionsPath,
-    ], { cwd: root, stdout: "pipe", stderr: "pipe" });
+    const result = Bun.spawnSync(
+      [process.execPath, "test/pagination-eval/run.ts", "--fixtures", fixturesPath, "--regressions", regressionsPath],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
     expect(result.exitCode).toBe(1);
     const line = (await Bun.file(regressionsPath).text()).trim();
     expect(line.length).toBeGreaterThan(0);
@@ -243,16 +243,18 @@ function baseFixture(): FixturePayload {
     version: 1,
     url: { ...page, page: 2 },
     head: [],
-    body: [{
-      tag: "nav",
-      ariaLabel: "nav",
-      dataPagination: true,
-      children: [
-        { tag: "a", key: "c1", text: "prev", href: { ...page, page: 1 }, rel: ["prev"] },
-        { tag: "span", text: "#2", flags: ["current"] },
-        { tag: "a", key: "c2", text: "next", href: { ...page, page: 3 }, rel: ["next"] },
-      ],
-    }],
+    body: [
+      {
+        tag: "nav",
+        ariaLabel: "nav",
+        dataPagination: true,
+        children: [
+          { tag: "a", key: "c1", text: "prev", href: { ...page, page: 1 }, rel: ["prev"] },
+          { tag: "span", text: "#2", flags: ["current"] },
+          { tag: "a", key: "c2", text: "next", href: { ...page, page: 3 }, rel: ["next"] },
+        ],
+      },
+    ],
     expected: { previous: ["c1"], next: ["c2"] },
   };
 }

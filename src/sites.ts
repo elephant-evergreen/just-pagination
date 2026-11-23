@@ -24,32 +24,36 @@ function render() {
   empty.hidden = hosts?.size !== 0 || host !== undefined;
   const scroll = list.parentElement!;
   const offset = scroll.scrollTop;
-  list.replaceChildren(...candidates.map(name => {
-    const row = document.createElement("li");
-    row.className = "site-row";
-    const label = document.createElement("span");
-    label.textContent = name;
-    row.append(label);
-    if (hosts?.has(name)) {
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.textContent = "×";
-      remove.disabled = busy;
-      remove.setAttribute("aria-label", "Enable pagination on " + name);
-      remove.addEventListener("click", () => { void update(name, false); });
-      row.append(remove);
-    } else {
-      row.classList.add("pending");
-      row.setAttribute("aria-label", "Site to disable: " + name);
-    }
-    return row;
-  }));
+  list.replaceChildren(
+    ...candidates.map((name) => {
+      const row = document.createElement("li");
+      row.className = "site-row";
+      const label = document.createElement("span");
+      label.textContent = name;
+      row.append(label);
+      if (hosts?.has(name)) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "×";
+        remove.disabled = busy;
+        remove.setAttribute("aria-label", "Enable pagination on " + name);
+        remove.addEventListener("click", () => {
+          void update(name, false);
+        });
+        row.append(remove);
+      } else {
+        row.classList.add("pending");
+        row.setAttribute("aria-label", "Site to disable: " + name);
+      }
+      return row;
+    }),
+  );
   scroll.scrollTop = offset;
 }
 
 async function loadSites() {
   const result: unknown = await chrome.runtime.sendMessage({ type: "disabled-sites" });
-  if (!Array.isArray(result) || !result.every(host => typeof host === "string")) throw new Error();
+  if (!Array.isArray(result) || !result.every((host) => typeof host === "string")) throw new Error();
   hosts = new Set(result);
 }
 
@@ -64,7 +68,7 @@ async function update(host: string, disabled: boolean) {
   }
   render();
   try {
-    if (await chrome.runtime.sendMessage({ type: "set-site-disabled", host, disabled }) !== true) throw new Error();
+    if ((await chrome.runtime.sendMessage({ type: "set-site-disabled", host, disabled })) !== true) throw new Error();
     await loadSites();
     field.value = "";
     showNote(disabled ? "" : "Pagination enabled on " + host + ".");
@@ -92,7 +96,7 @@ field.addEventListener("blur", () => {
     showNote("Enter a valid page URL.", true);
   }
 });
-form.addEventListener("submit", event => {
+form.addEventListener("submit", (event) => {
   event.preventDefault();
   const host = enteredHost(field.value);
   if (host) void update(host, true);
