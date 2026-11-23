@@ -123,6 +123,22 @@ test("known same-list routes stay directional in both directions", async () => {
   expect(content.pageDirection(new FakeAnchor("https://example.test/workflow/3", "3"), group(2))).toBeUndefined();
 });
 
+test("a page segment without a separator routes turns and recognizes a detail URL as the first page", async () => {
+  const content = await policy("https://example.test/gallery/group/page2/");
+  const second = group(2);
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page3/", "3"), second)).toBe("next");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page1/", "1"), second)).toBe("previous");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/", "1", undefined, "prev"), second)).toBe("previous");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/other/group/page3/", "3"), second)).toBeUndefined();
+
+  // 一覧の先頭を表示する詳細URLからは、直後のページだけを同じ一覧と見なします。
+  await policy("https://example.test/gallery/group/with/55661721797");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page2/", "2"), group(1))).toBe("next");
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page3/", "3"), group(1))).toBeUndefined();
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/group/page2/", "2"), group(3))).toBeUndefined();
+  expect(content.pageDirection(new FakeAnchor("https://example.test/gallery/other/page2/", "2"), group(1))).toBeUndefined();
+});
+
 test("infers a missing current page from a numbered path series", async () => {
   const content = await policy("https://example.test/list/5");
   const five = [
