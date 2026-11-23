@@ -16,9 +16,15 @@ rmSync("dist", { recursive: true, force: true });
   "cp -R extension/. dist/",
 ]
 
+[tasks.fmt]
+run = "bun fmt"
+
 [tasks.check]
 depends = ["build"]
-run = ["bun check -p tsconfig.tools.json", "bun test ./test"]
+run = ["bun fmt --check", "bun check -p tsconfig.tools.json", "bun test ./test"]
+
+[tasks.hooks]
+run = "git config core.hooksPath .githooks"
 
 [tasks.package]
 depends = ["check"]
