@@ -186,19 +186,16 @@ type Decisions = import("./protocol.js").Decisions;
     if (suffix && Number(suffix[1]) === page) return url.pathname.slice(0, -suffix[0].length);
   }
 
-  /** `<base>/page2/` 形式のページ番号付きパスから、末尾の区切りを除いた基準URLを返します。 */
   function pageSegmentBase(url: URL, page: number) {
     const segment = url.pathname.match(pagePath)?.[0];
     if (segment && Number(segment.match(/\d+/)?.[0]) === page) return url.pathname.slice(0, -segment.length).replace(/\/$/, "");
   }
 
-  /** 一覧の基準URL。`/123` 形式と `/page2/` 形式の両方を扱います。 */
   function listBase(url: URL, page: number) {
     const base = numberedPathBase(url, page) ?? pageSegmentBase(url, page);
     return base === undefined ? undefined : base.replace(/\/$/, "");
   }
 
-  /** 一覧の下にある詳細URL（`/pool/with/<id>` など）を、一覧の先頭と見なします。 */
   function belowList(pathname: string, base: string) {
     const path = pathname.replace(/\/$/, "");
     return Boolean(base) && path.startsWith(base + "/") &&
@@ -304,7 +301,6 @@ type Decisions = import("./protocol.js").Decisions;
       url.pathname.replace(/\/$/, "") === currentBase;
     const base = listBase(url, page) ?? (alias ? currentBase : undefined);
     if (base === undefined || url.search !== current.search || page === group.currentPage) return;
-    // 一覧の1ページ目を表示している詳細URL（`/pool/with/<id>`）からは、次のページだけを同じ一覧と見なします。
     if (base !== currentBase && !(group.currentPage === 1 && page === 2 && belowList(current.pathname, base))) return;
     return page > group.currentPage ? "next" : "previous";
   }
@@ -587,10 +583,6 @@ type Decisions = import("./protocol.js").Decisions;
     }
   }
 
-  /**
-   * リンクやボタンではなく、サイトが自前のクリック処理を付けた「もっと見る」の表示。
-   * 押せることを示す手掛かりは、ポインターの形状と、リンク・ボタンを含まないことです。
-   */
   function styledControl(node: Element): node is HTMLElement {
     if (!(node instanceof HTMLElement) || node.matches(controlSelector) || !/^(?:p|div|span|li)$/i.test(node.tagName)) return false;
     if (!isLoadMoreLabel(node) || getComputedStyle(node).cursor !== "pointer" || !node.getClientRects().length) return false;
