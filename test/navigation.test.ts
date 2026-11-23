@@ -39,6 +39,10 @@ async function withPage(html: string, run: (page: Page) => void | Promise<void>,
   for (const node of document.querySelectorAll<HTMLElement>('[id^="items"]')) {
     node.getBoundingClientRect = () => new window.DOMRect(10, 10, 400, 390);
   }
+  for (const node of document.querySelectorAll<HTMLElement>("[data-end-control]")) {
+    node.getBoundingClientRect = () => new window.DOMRect(10, 410, 200, 44);
+    hits.set(110, node);
+  }
   for (const carousel of document.querySelectorAll('[aria-roledescription="carousel"],section[aria-label$=" carousel"]')) {
     const center = 50 + 100 * row++;
     carousel.getBoundingClientRect = () => new window.DOMRect(center - 50, 20, 100, 200);
@@ -793,4 +797,49 @@ test("two append candidates are left alone rather than picking one", async () =>
       expect(press()).toBe(false);
       expect(clicks).toEqual([]);
     });
+});
+
+test("a pager on /page2/ paths turns and treats a detail URL below the list as its first page", async () => {
+  const pager = `<div class="pager">
+    <a id="page-one" href="/gallery/group/">1</a>
+    <span class="this-page">2</span>
+    <a id="page-three" href="/gallery/group/page3/">3</a>
+  </div>`;
+  await withPage(pager, ({ clicks, press }) => {
+    expect(press("ArrowLeft")).toBe(true);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["page-one", "page-three"]);
+  }, true, "/gallery/group/page2/");
+
+  const first = `<div class="pager">
+    <span class="this-page">1</span>
+    <a id="page-two" href="/gallery/group/page2/">2</a>
+    <a id="page-three" href="/gallery/group/page3/">3</a>
+  </div>`;
+  await withPage(first, ({ clicks, press }) => {
+    expect(press("ArrowLeft")).toBe(false);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["page-two"]);
+  }, true, "/gallery/group/with/55661721797");
+});
+
+test("a load-more label with a brand prefix works without a link or button element", async () => {
+  const control = '<p id="more" data-end-control>SNAP View More</p>';
+  await withPage(`<main>${listing}${control}</main>`, ({ root, clicks, press }) => {
+    const label = root.querySelector<HTMLElement>("#more")!;
+    expect(press()).toBe(false);
+    label.style.cursor = "pointer";
+    expect(press()).toBe(true);
+    expect(press()).toBe(false);
+    expect(clicks).toEqual(["more"]);
+  });
+});
+
+test("a styled label that wraps a real control stays out of the pager", async () => {
+  const nested = '<p id="more" data-end-control>View <a id="inner" href="/promo">More</a></p>';
+  await withPage(`<main>${listing}${nested}</main>`, ({ root, clicks, press }) => {
+    root.querySelector<HTMLElement>("#more")!.style.cursor = "pointer";
+    expect(press()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
 });

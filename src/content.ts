@@ -29,7 +29,7 @@ type Decisions = import("./protocol.js").Decisions;
   const navWords = /paginat|paging|(?:^|[\W_])pager(?:$|[\W_])|ページネーション|ページ送り|ページ移動|page[ -]?(?:nav(?:igation)?|numbers)/i;
   const ajaxLoadMoreButton = ".alm-btn-wrap > button.alm-load-more-btn";
   const loadMoreLabels = [
-    /^(?:load|show|see|view) (?:\d+ )?more(?: (?:products?|items?|results?|articles?|posts?|stories|recipes|projects|jobs|events|videos|news))?$/iu,
+    /^(?:[\p{L}\p{N}][\p{L}\p{N}&'’-]{0,11} )?(?:load|show|see|view) (?:\d+ )?more(?: (?:products?|items?|results?|articles?|posts?|stories|recipes|projects|jobs|events|videos|news|photos?|images?))?$/iu,
     /^(?:(?:商品|記事|検索結果|結果|投稿|アイテム|製品|無料増量漫画)を)?もっと(?:見る|みる|表示(?:する)?|読み込む)$/u,
     /^(?:mehr (?:(?:produkte|artikel|beiträge|ergebnisse) )?(?:laden|anzeigen)|meer (?:laden|tonen|weergeven|bekijken|(?:producten|artikelen|berichten) (?:laden|tonen))|laad meer)$/iu,
     /^(?:(?:afficher|voir|charger) plus(?: (?:de |d['’])(?:produits|articles|résultats|actualités))?|(?:cargar|mostrar|ver) más(?: (?:productos|resultados|artículos|entradas|noticias))?|(?:carregar|mostrar|ver) mais(?: (?:produtos|resultados|artigos|notícias))?|(?:carica|mostra|vedi) (?:altro|altri (?:prodotti|articoli|risultati)))$/iu,
@@ -42,7 +42,7 @@ type Decisions = import("./protocol.js").Decisions;
   const selectedSelector = '.active,.selected,.current,.is-current,[class$="--current"],[class*="--current "],[aria-label^="Current page," i]';
   const currentSelector = "[aria-current=page],[aria-current=true]";
   const pageParameter = /^(?:p|page|paged|pageno|pagenum|pagenumber|pg|start(?:_index|row)?|offset|skip|bsi)$/i;
-  const pagePath = /\/(?:page[\/=-]|p)\d+(?:\.html)?\/?$/i;
+  const pagePath = /\/(?:page[\/=-]?|p)\d+(?:\.html)?\/?$/i;
   const numberedPath = /\/(\d{1,6})\/?$/;
   const trackingParameter = /^(?:utm_.+|gclid|fbclid|ved)$/i;
   const gmailHost = "mail.google.com";
@@ -186,6 +186,25 @@ type Decisions = import("./protocol.js").Decisions;
     if (suffix && Number(suffix[1]) === page) return url.pathname.slice(0, -suffix[0].length);
   }
 
+  /** `<base>/page2/` 形式のページ番号付きパスから、末尾の区切りを除いた基準URLを返します。 */
+  function pageSegmentBase(url: URL, page: number) {
+    const segment = url.pathname.match(pagePath)?.[0];
+    if (segment && Number(segment.match(/\d+/)?.[0]) === page) return url.pathname.slice(0, -segment.length).replace(/\/$/, "");
+  }
+
+  /** 一覧の基準URL。`/123` 形式と `/page2/` 形式の両方を扱います。 */
+  function listBase(url: URL, page: number) {
+    const base = numberedPathBase(url, page) ?? pageSegmentBase(url, page);
+    return base === undefined ? undefined : base.replace(/\/$/, "");
+  }
+
+  /** 一覧の下にある詳細URL（`/pool/with/<id>` など）を、一覧の先頭と見なします。 */
+  function belowList(pathname: string, base: string) {
+    const path = pathname.replace(/\/$/, "");
+    return Boolean(base) && path.startsWith(base + "/") &&
+      !pagePath.test(path.slice(base.length)) && !numberedPath.test(path.slice(base.length));
+  }
+
   function numberedPageStep(pages: NumberedAddress[]) {
     const first = pages[0];
     const second = first && pages.find(page => page.number !== first.number);
@@ -277,14 +296,16 @@ type Decisions = import("./protocol.js").Decisions;
     if (page === undefined || group.currentPage === undefined) return;
     const url = new URL(control.href);
     const current = new URL(location.href);
-    const currentBase = numberedPathBase(current, group.currentPage) ??
+    const currentBase = listBase(current, group.currentPage) ??
       (group.currentPage === 1 ? current.pathname.replace(/\/$/, "") : undefined);
     const rel = control.getAttribute("rel")?.toLowerCase().split(/\s+/) ?? [];
     const alias = page === 1 && group.currentPage === 2 && url.search === current.search &&
       (rel.includes("prev") || rel.includes("previous")) &&
       url.pathname.replace(/\/$/, "") === currentBase;
-    const base = numberedPathBase(url, page) ?? (alias ? currentBase : undefined);
-    if (base === undefined || base !== currentBase || url.search !== current.search || page === group.currentPage) return;
+    const base = listBase(url, page) ?? (alias ? currentBase : undefined);
+    if (base === undefined || url.search !== current.search || page === group.currentPage) return;
+    // 一覧の1ページ目を表示している詳細URL（`/pool/with/<id>`）からは、次のページだけを同じ一覧と見なします。
+    if (base !== currentBase && !(group.currentPage === 1 && page === 2 && belowList(current.pathname, base))) return;
     return page > group.currentPage ? "next" : "previous";
   }
 
@@ -566,24 +587,38 @@ type Decisions = import("./protocol.js").Decisions;
     }
   }
 
+  /**
+   * リンクやボタンではなく、サイトが自前のクリック処理を付けた「もっと見る」の表示。
+   * 押せることを示す手掛かりは、ポインターの形状と、リンク・ボタンを含まないことです。
+   */
+  function styledControl(node: Element): node is HTMLElement {
+    if (!(node instanceof HTMLElement) || node.matches(controlSelector) || !/^(?:p|div|span|li)$/i.test(node.tagName)) return false;
+    if (!isLoadMoreLabel(node) || getComputedStyle(node).cursor !== "pointer" || !node.getClientRects().length) return false;
+    if (node.closest("a,form," + nonPagination)) return false;
+    return ![...node.querySelectorAll(controlSelector)].some(child => child.getClientRects().length);
+  }
+
   function loadMoreAtEnd(): LoadMore | undefined {
     const main = document.querySelector("main,[role=main]");
     let found: LoadMore | undefined;
-    for (const control of document.querySelectorAll(controlSelector)) {
+    for (const control of document.querySelectorAll(controlSelector + ",p,div,span,li")) {
       if (main && !control.closest("main,[role=main]")) continue;
+      const styled = styledControl(control);
+      if (!styled && !control.matches(controlSelector)) continue;
       const ajaxListing = ajaxLoadMoreListing(control);
       const page = control instanceof HTMLAnchorElement ? pageAddress(new URL(control.href)) : undefined;
       if (control instanceof HTMLAnchorElement) {
         if (!page || !adjacentAddress(control.href, "next")) continue;
       } else if (!isLoadMoreLabel(control) && !declaresManualLoadMore(control, ajaxListing?.list)) continue;
-      if (!usable(control) ||
+      if ((!styled && !usable(control)) ||
           control.closest("aside,details,form,header,footer,.ajax-load-more-wrap.alm-loading") ||
           control.matches("[aria-expanded],[aria-haspopup],.alm-load-more-btn:is(.loading,.done)")) continue;
       const { left, top, width, height } = control.getBoundingClientRect();
       const underPointer = document.elementFromPoint(left + width / 2, top + height / 2);
       if (!underPointer || !control.contains(underPointer)) continue;
-      const listing = ajaxListing ?? wooCommerceListing(control) ??
-        (control.closest("article") ? undefined : listingBefore(control));
+      const listing = ajaxListing ?? wooCommerceListing(control) ?? listingBefore(control);
+      const article = control.closest("article");
+      if (!ajaxListing && listing && article && !article.contains(listing.list)) continue;
       if (!listing || listing.list.closest("[aria-busy=true]")) continue;
       if (page) {
         const current = pageAddress(new URL(location.href));
