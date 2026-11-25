@@ -4,9 +4,9 @@
 
 ## Public information checklist
 
-- [ ] No private repository names, internal project names, private or internal hostnames, LAN addresses, SSIDs, or per-device update and verification history.
-- [ ] No Chrome Web Store account details, TypeSafe/Jev API keys, browsing data, or disabled-site lists.
-- [ ] Examples, fixtures, and tests use synthetic hosts and keys.
+- [ ] No private repository names, internal project names, credentials, API keys, users' data, or per-device update and verification history.
+- [ ] No Chrome Web Store account details, TypeSafe/Jev API keys, browsing data, page contents, or disabled-site lists.
+- [ ] Examples, fixtures, and tests use synthetic page hosts and placeholder keys.
 - [ ] Supported and tested versions are documented separately from per-device history.
 
 ## Checks

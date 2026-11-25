@@ -69,5 +69,5 @@ See the [privacy policy](PRIVACY.md) for data handling.
 Paste only the following paragraph into **Test instructions → Additional instructions**, which has a 500-character limit:
 
 ```text
-In Settings, test Left/Right and page buttons without an API key. On a paginated site, test both arrows and toolbar Disable/Enable. Check carousel arrows at https://www.w3.org/WAI/ARIA/apg/patterns/carousel/examples/carousel-1-prev-next/?norotate=true#ex_label . Inputs must retain arrow keys. Optional Jev: enter a Jev API key in Settings and click Connect.
+In Settings, test Left/Right and page buttons without an API key. On a paginated site, test both arrows and toolbar Disable/Enable. Check carousel arrows at https://www.w3.org/WAI/ARIA/apg/patterns/carousel/examples/carousel-1-prev-next/?norotate=true#ex_label . Inputs must retain arrow keys. Optional Jev: enter the test key in Settings and click Connect.
 ```
