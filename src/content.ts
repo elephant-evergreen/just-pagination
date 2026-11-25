@@ -91,8 +91,9 @@ type Decisions = import("./protocol.js").Decisions;
   function usable(node: Element): node is HTMLElement {
     if (node.closest(nonPagination + ",form[method=dialog]") || !availableControl(node)) return false;
     if (node instanceof HTMLAnchorElement) {
-      if (node.hasAttribute("download") || (node.target && node.target !== "_self") || !safeDestination(node.href))
-        return false;
+      if (node.hasAttribute("download") || (node.target && node.target !== "_self")) return false;
+      if (clickOnlyLink(node)) return isLoadMoreLabel(node);
+      if (!safeDestination(node.href)) return false;
       if (!node.closest("form") || pageAddress(new URL(node.href))) return true;
       const direction = directionOf(node);
       return direction !== "unknown" && adjacentAddress(node.href, direction);
@@ -725,6 +726,12 @@ type Decisions = import("./protocol.js").Decisions;
     return ![...node.querySelectorAll(controlSelector)].some((child) => child.getClientRects().length);
   }
 
+  function clickOnlyLink(node: Element) {
+    if (!(node instanceof HTMLAnchorElement)) return false;
+    const href = node.getAttribute("href")?.trim().toLowerCase();
+    return href === "#" || href?.startsWith("javascript:") === true;
+  }
+
   function loadMoreAtEnd(): LoadMore | undefined {
     const main = document.querySelector("main,[role=main]");
     let found: LoadMore | undefined;
@@ -733,8 +740,9 @@ type Decisions = import("./protocol.js").Decisions;
       const styled = styledControl(control);
       if (!styled && !control.matches(controlSelector)) continue;
       const ajaxListing = ajaxLoadMoreListing(control);
-      const page = control instanceof HTMLAnchorElement ? pageAddress(new URL(control.href)) : undefined;
-      if (control instanceof HTMLAnchorElement) {
+      const clickOnly = clickOnlyLink(control);
+      const page = control instanceof HTMLAnchorElement && !clickOnly ? pageAddress(new URL(control.href)) : undefined;
+      if (control instanceof HTMLAnchorElement && !clickOnly) {
         if (!page || !adjacentAddress(control.href, "next")) continue;
       } else if (!isLoadMoreLabel(control) && !declaresManualLoadMore(control, ajaxListing?.list)) continue;
       if (

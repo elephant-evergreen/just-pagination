@@ -169,6 +169,34 @@ test("load more is one click per batch and can retry after a stalled request", a
   });
 });
 
+test("a load-more link that only runs a click handler loads another batch", async () => {
+  await withPage(
+    `<main>${listing}<div><a id="more" href="#">もっと読み込む</a></div></main>`,
+    ({ root, clicks, press }) => {
+      expect(press("ArrowLeft")).toBe(false);
+      expect(press()).toBe(true);
+      expect(clicks).toEqual(["more"]);
+      root.querySelector("#items")!.insertAdjacentHTML("beforeend", '<article><a href="/items/d">D</a></article>');
+      expect(press()).toBe(true);
+      expect(clicks).toEqual(["more", "more"]);
+    },
+  );
+});
+
+test("a load-more link that only runs a click handler needs a list before it", async () => {
+  await withPage(`<main><a id="more" href="#">もっと見る</a></main>`, ({ clicks, press }) => {
+    expect(press()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
+});
+
+test("an unlabelled placeholder link is not used as a page control", async () => {
+  await withPage(`<main>${listing}<a id="more" href="#">Next</a></main>`, ({ clicks, press }) => {
+    expect(press()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
+});
+
 test("an append link must be visible and point to the next page of the same list", async () => {
   const link = '<a id="more" aria-label="商品をもっと見る" rel="next" href="/list?page=2#items">もっと見る</a>';
   await withPage(
