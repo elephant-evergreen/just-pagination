@@ -24,3 +24,5 @@ mise run check
 ```
 
 It builds `dist/`, checks formatting, type-checks the tooling, and runs the tests. Run `mise run fmt` to format code.
+
+When you add, remove, or update a workflow dependency, regenerate and commit `.github/workflows/actions.lock` with `gh actions-lock`. See [GitHub's lockfile guide](https://docs.github.com/en/actions/how-tos/secure-your-work/lock-workflow-dependencies).

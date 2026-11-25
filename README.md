@@ -39,9 +39,7 @@ mise run hooks
 mise run check
 ```
 
-This builds `dist/`, checks formatting, and runs the tests. Run `mise run fmt` to format code. `mise run hooks` points Git at `.githooks`, where the pre-push hook runs the same format check before you push. See the [release guide](RELEASE.md) to package a version for distribution.
-
-When you add, remove, or update a workflow dependency, regenerate and commit `.github/workflows/actions.lock` with `gh actions-lock`. [GitHub's lockfile guide](https://docs.github.com/en/actions/how-tos/secure-your-work/lock-workflow-dependencies)
+This builds `dist/`, checks formatting, and runs the tests. Run `mise run fmt` to format code. `mise run hooks` points Git at `.githooks`, where the pre-push hook runs the same format check before you push. See [contributing](CONTRIBUTING.md) for the lockfile step and the [release guide](RELEASE.md) to package a version for distribution.
 
 ## Install manually
 
