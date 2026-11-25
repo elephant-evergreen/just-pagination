@@ -8,7 +8,3 @@
 - [ ] No Chrome Web Store account details, TypeSafe/Jev API keys, browsing data, page contents, or disabled-site lists.
 - [ ] Examples, fixtures, and tests use synthetic page hosts and placeholder keys.
 - [ ] Supported and tested versions are documented separately from per-device history.
-
-## Checks
-
-- [ ] `mise run check`
