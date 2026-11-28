@@ -58,7 +58,9 @@ async function withPage(
     hits.set(center, carousel);
   }
   for (const slide of document.querySelectorAll<HTMLElement>("[data-slide]")) {
-    slide.getBoundingClientRect = () => new window.DOMRect(10, 40, 300, 200);
+    const center = 50 + 100 * row++;
+    slide.getBoundingClientRect = () => new window.DOMRect(center - 50, 40, 100, 200);
+    hits.set(center, slide);
   }
   document.elementFromPoint = (x) => hits.get(x) ?? null;
   const clicks: string[] = [];
@@ -516,6 +518,55 @@ test("unnamed carousels need both a slide track and labelled slide buttons", asy
       new root.ownerDocument.defaultView!.DOMRect(10, 40, 60, 200);
     expect(press()).toBe(false);
     expect(clicks).toEqual([]);
+  });
+});
+
+test("slide buttons named for a slider turn its rail", async () => {
+  const rail = `<section data-carousel>
+    <div style="overflow-x:auto"><div>
+      <div data-slide>Slide A</div><div data-slide>Slide B</div><div data-slide>Slide C</div>
+    </div></div>
+    <button id="rail-previous" aria-label="slider navigation previous">‹</button>
+    <button id="rail-next" aria-label="slider navigation next">›</button>
+  </section>`;
+  await withPage(rail, ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["rail-next", "rail-previous"]);
+  });
+});
+
+test("slides without a box do not keep a visible rail out", async () => {
+  const rail = `<section data-carousel>
+    <div style="overflow-x:hidden"><div>
+      <div data-slide>Slide A</div><div data-slide>Slide B</div><div data-slide>Slide C</div>
+    </div></div>
+    <button id="rail-next" aria-label="slider navigation next">›</button>
+  </section>`;
+  await withPage(rail, ({ root, clicks, press }) => {
+    root.querySelectorAll<HTMLElement>("[data-slide]")[1].getBoundingClientRect = () =>
+      new root.ownerDocument.defaultView!.DOMRect(10, 40, 0, 0);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["rail-next"]);
+  });
+});
+
+test("a slider button keeps its own rail under a wider track", async () => {
+  const rail = `<div id="outer" style="overflow-x:hidden"><div>
+    <section id="rail" data-carousel>
+      <div style="overflow-x:hidden"><div>
+        <div data-slide>Slide A</div><div data-slide>Slide B</div>
+      </div></div>
+      <button id="rail-next" aria-label="slider navigation next">›</button>
+    </section>
+    <div id="filler">Filler</div>
+  </div></div>`;
+  await withPage(rail, ({ root, clicks, press }) => {
+    const filler = root.querySelector<HTMLElement>("#filler")!;
+    filler.getBoundingClientRect = () => new root.ownerDocument.defaultView!.DOMRect(10, 40, 100, 200);
+    moveMouse(root.querySelector<HTMLElement>("#rail [data-slide]")!);
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["rail-next"]);
   });
 });
 
