@@ -28,8 +28,8 @@ type Decisions = import("./protocol.js").Decisions;
   };
   const slideLabels: Record<Direction, RegExp> = {
     previous:
-      /^(?:‹|←|❮|<|(?:(?:show|go to(?: the)?) )?prev(?:ious)?(?: (?:slide|image|photo))?|前へ|前の(?:スライド|画像|写真))$/iu,
-    next: /^(?:›|→|❯|>|(?:(?:show|go to(?: the)?) )?next(?: (?:slide|image|photo))?|次へ|次の(?:スライド|画像|写真))$/iu,
+      /^(?:‹|←|❮|<|(?:(?:show|go to(?: the)?) )?(?:(?:slider|carousel|gallery) )?(?:navigation )?prev(?:ious)?(?: (?:slide|image|photo))?|前へ|前の(?:スライド|画像|写真))$/iu,
+    next: /^(?:›|→|❯|>|(?:(?:show|go to(?: the)?) )?(?:(?:slider|carousel|gallery) )?(?:navigation )?next(?: (?:slide|image|photo))?|次へ|次の(?:スライド|画像|写真))$/iu,
   };
   const navWords =
     /paginat|paging|(?:^|[\W_])pager(?:$|[\W_])|ページネーション|ページ送り|ページ移動|page[ -]?(?:nav(?:igation)?|numbers)/i;
@@ -1235,10 +1235,8 @@ type Decisions = import("./protocol.js").Decisions;
   }
 
   function isSlideTrack(track: Element) {
-    const children = [...track.children];
-    if (children.length < 2) return false;
-    const widths = children.map((child) => child.getBoundingClientRect().width);
-    if (widths.some((width) => width === 0)) return false;
+    const widths = [...track.children].map((child) => child.getBoundingClientRect().width).filter((width) => width > 0);
+    if (widths.length < 2) return false;
     const widest = Math.max(...widths);
     if (Math.min(...widths) < widest * 0.75) return false;
     const parent = track.parentElement;
@@ -1276,17 +1274,17 @@ type Decisions = import("./protocol.js").Decisions;
     if (!node) return;
     const explicit = node.closest(carouselRegion);
     if (explicit) return explicit;
-    const track = slideTrack(node);
-    if (track) {
-      for (let root = track.parentElement; root && root !== document.body; root = root.parentElement) {
-        if (slideControlIn(root)) return root;
+    const control = node.closest(buttonSelector);
+    if (control && slideControl(control)) {
+      for (let root = control.parentElement; root && root !== document.body; root = root.parentElement) {
+        if (trackIn(root)) return root;
       }
       return;
     }
-    const control = node.closest(buttonSelector);
-    if (!control || !slideControl(control)) return;
-    for (let root = control.parentElement; root && root !== document.body; root = root.parentElement) {
-      if (trackIn(root)) return root;
+    const track = slideTrack(node);
+    if (!track) return;
+    for (let root = track.parentElement; root && root !== document.body; root = root.parentElement) {
+      if (slideControlIn(root)) return root;
     }
   }
 
