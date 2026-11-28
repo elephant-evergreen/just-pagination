@@ -68,6 +68,8 @@ type Decisions = import("./protocol.js").Decisions;
   type LoadMore = { control: HTMLElement; list: Element; itemCount: number; page?: ReturnType<typeof pageAddress> };
   let pendingLoadMore: (Omit<LoadMore, "control"> & { address: string; retryAt: number }) | undefined;
   let carouselPointer: { carousel: Element; x: number; y: number } | undefined;
+  let pointerTarget: Element | undefined;
+  let pointerCarousel: Element | undefined;
 
   function safeDestination(raw: string): string | undefined {
     try {
@@ -1198,38 +1200,101 @@ type Decisions = import("./protocol.js").Decisions;
     return overflowX === "auto" || overflowX === "scroll";
   }
 
+  function slideDirection(button: Element) {
+    const [name] = label(button);
+    return name ? directions.find((value) => slideLabels[value].test(name)) : undefined;
+  }
+
+  function slideControl(button: Element) {
+    if (
+      button.closest(
+        'a,form,nav,[role=navigation],[aria-roledescription="slide" i],[aria-roledescription="スライド"],[aria-expanded],' +
+          protectedControls,
+      ) ||
+      (button instanceof HTMLButtonElement && button.form)
+    )
+      return;
+    return slideDirection(button);
+  }
+
+  function isSlideTrack(track: Element) {
+    const children = [...track.children];
+    if (children.length < 2) return false;
+    const widths = children.map((child) => child.getBoundingClientRect().width);
+    if (widths.some((width) => width === 0)) return false;
+    const widest = Math.max(...widths);
+    if (Math.min(...widths) < widest * 0.75) return false;
+    const parent = track.parentElement;
+    if (!parent) return false;
+    const { overflowX } = getComputedStyle(parent);
+    return (
+      overflowX === "hidden" ||
+      overflowX === "clip" ||
+      overflowX === "auto" ||
+      overflowX === "scroll" ||
+      track.scrollWidth > track.clientWidth + 8
+    );
+  }
+
+  function slideTrack(node: Element) {
+    for (let track: Element | null = node; track && track !== document.body; track = track.parentElement) {
+      if (isSlideTrack(track)) return track;
+    }
+  }
+
+  function trackIn(root: Element) {
+    for (const node of root.querySelectorAll("*")) {
+      if (isSlideTrack(node)) return node;
+    }
+  }
+
+  function slideControlIn(root: Element) {
+    for (const button of root.querySelectorAll(buttonSelector)) {
+      if (slideControl(button)) return true;
+    }
+    return false;
+  }
+
+  function carouselOf(node: Element | null | undefined) {
+    if (!node) return;
+    const explicit = node.closest(carouselRegion);
+    if (explicit) return explicit;
+    const track = slideTrack(node);
+    if (track) {
+      for (let root = track.parentElement; root && root !== document.body; root = root.parentElement) {
+        if (slideControlIn(root)) return root;
+      }
+      return;
+    }
+    const control = node.closest(buttonSelector);
+    if (!control || !slideControl(control)) return;
+    for (let root = control.parentElement; root && root !== document.body; root = root.parentElement) {
+      if (trackIn(root)) return root;
+    }
+  }
+
   function carouselOwnsShortcut(carousel: Element, key: string) {
     const shortcut = `[aria-keyshortcuts~="${key}" i]`;
     return (
       carousel.matches(shortcut) ||
-      [...carousel.querySelectorAll(shortcut)].some((node) => node.closest(carouselRegion) === carousel)
+      [...carousel.querySelectorAll(shortcut)].some((node) => carouselOf(node) === carousel)
     );
   }
 
   function* carouselControls(carousel: Element) {
     for (const button of carousel.querySelectorAll(buttonSelector)) {
-      if (
-        button.closest(carouselRegion) !== carousel ||
-        button.closest(
-          'a,form,nav,[role=navigation],[aria-roledescription="slide" i],[aria-roledescription="スライド"],[aria-expanded],' +
-            protectedControls,
-        ) ||
-        (button instanceof HTMLButtonElement && button.form)
-      )
-        continue;
-      const [name] = label(button);
-      const direction = name && directions.find((value) => slideLabels[value].test(name));
-      if (direction) yield { button, direction };
+      const direction = slideControl(button);
+      if (!direction || carouselOf(button) !== carousel) continue;
+      yield { button, direction };
     }
   }
 
   function carouselForKey(carousel: Element, key: string) {
-    for (
-      let region: Element | null | undefined = carousel;
-      region;
-      region = region.parentElement?.closest(carouselRegion)
-    ) {
+    for (let region: Element | undefined = carousel; region;) {
       if (!carouselControls(region).next().done || carouselOwnsShortcut(region, key)) return region;
+      const parent = carouselOf(region.parentElement);
+      if (!parent || parent === region) return carousel;
+      region = parent;
     }
     return carousel;
   }
@@ -1250,9 +1315,19 @@ type Decisions = import("./protocol.js").Decisions;
     return Boolean(carouselTarget(carousel, "next") || carouselTarget(carousel, "previous"));
   }
 
+  function visibleCarousels() {
+    const carousels = new Set<Element>(document.querySelectorAll(carouselRegion));
+    for (const button of document.querySelectorAll(buttonSelector)) {
+      if (!slideControl(button)) continue;
+      const carousel = carouselOf(button);
+      if (carousel) carousels.add(carousel);
+    }
+    return carousels;
+  }
+
   function singleVisibleCarousel() {
     let visible: Element | undefined;
-    for (const carousel of document.querySelectorAll(carouselRegion)) {
+    for (const carousel of visibleCarousels()) {
       const { left, top, width, height } = carousel.getBoundingClientRect();
       if (!width || !height || !carousel.contains(document.elementFromPoint(left + width / 2, top + height / 2)))
         continue;
@@ -1265,10 +1340,11 @@ type Decisions = import("./protocol.js").Decisions;
 
   function pointedCarousel(key: string) {
     const pointer = carouselPointer;
-    if (pointer && document.elementFromPoint(pointer.x, pointer.y)?.closest(carouselRegion) === pointer.carousel) {
-      const carousel = carouselForKey(pointer.carousel, key);
-      if (carouselHasVisibleControls(carousel)) return carousel;
-    }
+    if (!pointer) return;
+    const pointed = document.elementFromPoint(pointer.x, pointer.y);
+    if (!(pointed instanceof Element) || carouselOf(pointed) !== pointer.carousel) return;
+    const carousel = carouselForKey(pointer.carousel, key);
+    if (carouselHasVisibleControls(carousel)) return carousel;
   }
 
   function turnSlide(carousel: Element, target: HTMLElement, direction: Direction) {
@@ -1302,8 +1378,13 @@ type Decisions = import("./protocol.js").Decisions;
     (event) => {
       if (!enabled || !event.isTrusted || event.pointerType !== "mouse" || (!event.movementX && !event.movementY))
         return;
-      const carousel = event.buttons === 0 && event.target instanceof Element && event.target.closest(carouselRegion);
-      carouselPointer = carousel ? { carousel, x: event.clientX, y: event.clientY } : undefined;
+      const target = event.buttons === 0 && event.target instanceof Element ? event.target : undefined;
+      if (target !== pointerTarget) {
+        pointerTarget = target;
+        pointerCarousel = target ? carouselOf(target) : undefined;
+      }
+      carouselPointer =
+        target && pointerCarousel ? { carousel: pointerCarousel, x: event.clientX, y: event.clientY } : undefined;
     },
     { capture: true, passive: true },
   );
@@ -1361,9 +1442,9 @@ type Decisions = import("./protocol.js").Decisions;
     if (!enabled || event.defaultPrevented) return;
     if (path.some(siteUsesArrowKeys)) return;
     if (document.fullscreenElement || window.getSelection()?.type === "Range") return;
-    const focusedCarousel = path.find(
-      (node): node is Element => node instanceof Element && node.matches(carouselRegion),
-    );
+    const focusedCarousel =
+      path.find((node): node is Element => node instanceof Element && node.matches(carouselRegion)) ??
+      (event.target instanceof Element ? carouselOf(event.target) : undefined);
     let carousel = focusedCarousel && carouselForKey(focusedCarousel, event.key);
     let more: LoadMore | undefined;
     let target: HTMLElement | undefined;

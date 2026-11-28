@@ -20,7 +20,7 @@ In **Just Pagination Settings**, press ← or → under **Try the arrow keys** t
 
 Press ← or → on a list with previous or next pages. The shortcut can respond while the page is still loading. For supported **Load more** controls, scroll until the control is visible and press → to load another batch. If the popup shows **No access**, check [Chrome’s site access settings](https://support.google.com/chrome/answer/2664769?hl=en).
 
-When a single carousel is visible and the page has no list navigation, press ← or → to move between slides. When list navigation is available, it takes priority by default. Move the pointer onto a carousel or press **Tab** to focus one of its slide buttons. Use the same selection when several carousels are visible. Supported carousels identify themselves and have labelled slide buttons.
+When a single carousel is visible and the page has no list navigation, press ← or → to move between slides. When list navigation is available, it takes priority by default. Move the pointer onto a carousel or press **Tab** to focus one of its slide buttons. Use the same selection when several carousels are visible. Supported carousels have labelled previous and next slide buttons and a visible row of slides, even when the carousel itself is unlabelled.
 
 To try carousel support ahead of the next Chrome Web Store update, [build from source](#build-from-source) and open the [W3C carousel demo](https://www.w3.org/WAI/ARIA/apg/patterns/carousel/examples/carousel-1-prev-next/?norotate=true#ex_label).
 
