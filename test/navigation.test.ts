@@ -51,11 +51,14 @@ async function withPage(
     hits.set(110, node);
   }
   for (const carousel of document.querySelectorAll(
-    '[aria-roledescription="carousel"],section[aria-label$=" carousel"]',
+    '[aria-roledescription="carousel"],section[aria-label$=" carousel"], [data-carousel]',
   )) {
     const center = 50 + 100 * row++;
     carousel.getBoundingClientRect = () => new window.DOMRect(center - 50, 20, 100, 200);
     hits.set(center, carousel);
+  }
+  for (const slide of document.querySelectorAll<HTMLElement>("[data-slide]")) {
+    slide.getBoundingClientRect = () => new window.DOMRect(10, 40, 300, 200);
   }
   document.elementFromPoint = (x) => hits.get(x) ?? null;
   const clicks: string[] = [];
@@ -402,6 +405,72 @@ test("a named carousel's arrow buttons can sit outside its nested carousel track
     true,
     "/list?page=2",
   );
+});
+
+const slideTrackCarousel = (id: string) => `<section id="${id}" data-carousel>
+  <div style="overflow-x:hidden"><div>
+    <div data-slide>Slide A</div><div data-slide>Slide B</div><div data-slide>Slide C</div>
+  </div></div>
+  <button id="${id}-previous" aria-label="前のスライド">‹</button>
+  <button id="${id}-next" aria-label="次のスライド">›</button>
+</section>`;
+
+test("an unnamed carousel with labelled slide buttons and a slide track turns slides", async () => {
+  await withPage(slideTrackCarousel("gallery"), ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["gallery-next", "gallery-previous"]);
+  });
+});
+
+test("unnamed carousels need a selection when several are visible", async () => {
+  await withPage(slideTrackCarousel("first") + slideTrackCarousel("second"), ({ root, clicks, press }) => {
+    const next = root.querySelector<HTMLButtonElement>("#second-next")!;
+    expect(press()).toBe(false);
+    moveMouse(next);
+    expect(press()).toBe(true);
+    next.blur();
+    root.querySelector<HTMLElement>("#first-next")!.focus();
+    expect(press("ArrowLeft", false, root.querySelector("#first-next")!)).toBe(true);
+    expect(clicks).toEqual(["second-next", "first-previous"]);
+  });
+});
+
+test("list paging keeps priority over an unnamed carousel", async () => {
+  await withPage(
+    slideTrackCarousel("gallery") + adjacentPages,
+    ({ root, clicks, press }) => {
+      expect(press()).toBe(true);
+      moveMouse(root.querySelector("#gallery-next")!);
+      expect(press()).toBe(true);
+      expect(clicks).toEqual(["next-page", "gallery-next"]);
+    },
+    true,
+    "/list?page=2",
+  );
+});
+
+test("unnamed carousels need both a slide track and labelled slide buttons", async () => {
+  const controlsOnly =
+    '<section><button id="previous" aria-label="前のスライド">‹</button>' +
+    '<button id="next" aria-label="次のスライド">›</button></section>';
+  await withPage(controlsOnly, ({ clicks, press }) => {
+    expect(press()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
+
+  const unevenTrack = `<section data-carousel>
+    <div style="overflow-x:hidden"><div>
+      <div data-slide>Slide A</div><div data-slide>Slide B</div>
+    </div></div>
+    <button id="next" aria-label="次のスライド">›</button>
+  </section>`;
+  await withPage(unevenTrack, ({ root, clicks, press }) => {
+    root.querySelectorAll<HTMLElement>("[data-slide]")[1].getBoundingClientRect = () =>
+      new root.ownerDocument.defaultView!.DOMRect(10, 40, 60, 200);
+    expect(press()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
 });
 
 test("paging wins until the mouse selects a carousel, and scrolling the page clears that selection", async () => {
