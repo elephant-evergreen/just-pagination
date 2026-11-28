@@ -252,6 +252,52 @@ test("a click-only pager without named arrows steps to the adjacent number", asy
   });
 });
 
+const offsetPager = (current?: number) => {
+  const pages = [2, 3, 4, 5].map((page) =>
+    page === current
+      ? `<li><a class="active" href="">${page}</a></li>`
+      : `<li><a href="/new/${page - 1}">${page}</a></li>`,
+  );
+  const head =
+    current === undefined
+      ? '<li><a class="active">Newest</a></li>'
+      : `<li><a href="/">Newest</a></li><li><a id="page-prev" class="prev-page" href="/new/${current - 2}">Prev</a></li>`;
+  return (
+    '<div class="pagination"><ul>' +
+    head +
+    pages.join("") +
+    '<li><a href="#" class="ellipsis">...</a></li><li><a href="/new/1000">1001</a></li>' +
+    `<li><a id="page-next" class="next-page" href="/new/${current ?? 1}">Next</a></li></ul></div>`
+  );
+};
+
+test("a pager that words its current page turns by the named next control", async () => {
+  await withPage(`<main>${listing}${showMore}${offsetPager()}</main>`, ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(clicks).toEqual(["page-next"]);
+  });
+});
+
+test("a pager whose links run one page behind its numbers turns to the named neighbors", async () => {
+  await withPage(
+    `<main>${listing}${offsetPager(4)}</main>`,
+    ({ clicks, press }) => {
+      expect(press()).toBe(true);
+      expect(press("ArrowLeft")).toBe(true);
+      expect(clicks).toEqual(["page-next", "page-prev"]);
+    },
+    true,
+    "/new/3",
+  );
+});
+
+test("a pager without a marked page leaves the arrows alone", async () => {
+  await withPage(`<main>${listing}${offsetPager().replace(' class="active"', "")}</main>`, ({ clicks, press }) => {
+    expect(press()).toBe(false);
+    expect(clicks).toEqual([]);
+  });
+});
+
 test("numbered links distinguish the previous page from a distant earlier page", async () => {
   const pager =
     '<nav aria-label="Pagination"><a href="?start=0"><svg></svg></a>' +

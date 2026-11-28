@@ -552,7 +552,19 @@ type Decisions = import("./protocol.js").Decisions;
     if (/(?:^|[\s_-])next(?:[\s_-]|$)/i.test(names)) return "next";
   }
 
-  function clickDrivenPager(): Targets | undefined {
+  function pagerControl(node: Element): node is HTMLElement {
+    if (!(node instanceof HTMLElement) || node.closest(nonPagination)) return false;
+    return node instanceof HTMLAnchorElement && !node.hasAttribute("href") ? availableControl(node) : usable(node);
+  }
+
+  function unnumberedCurrent(root: Element, controls: HTMLElement[]) {
+    const marked = [...root.querySelectorAll(selectedSelector + "," + currentSelector)].filter(
+      (node) => !controls.some((control) => control !== node && control.contains(node)),
+    );
+    return marked.length === 1 ? marked[0] : undefined;
+  }
+
+  function markedPager(): Targets | undefined {
     const roots = [...document.querySelectorAll(paginationSelector)].filter(
       (root): root is HTMLElement =>
         root instanceof HTMLElement &&
@@ -560,15 +572,20 @@ type Decisions = import("./protocol.js").Decisions;
         (navWords.test(root.getAttribute("class") ?? "") || navWords.test(root.getAttribute("aria-label") ?? "")),
     );
     for (const root of roots) {
-      const controls = [...root.querySelectorAll<HTMLElement>("a:not([href])")].filter(availableControl);
+      const controls = [...root.querySelectorAll<HTMLElement>("a,button,[role=button]")].filter(pagerControl);
+      if (controls.length > 32) continue;
       const numbers = controls.map(numberOf).filter((page): page is number => page !== undefined);
       if (numbers.length < 3 || !numbers.every((page, index) => index === 0 || numbers[index - 1] < page)) continue;
-      const current = currentControl(root, controls);
-      const currentPage = current === undefined ? undefined : numberOf(current);
-      if (currentPage === undefined) continue;
+      const current = currentControl(root, controls) ?? unnumberedCurrent(root, controls);
+      if (!current) continue;
+      const currentPage = numberOf(current);
+      const other = (control: HTMLElement) => control !== current && !control.contains(current);
       const step = (direction: Direction) =>
-        controls.find((control) => directionHint(control) === direction) ??
-        controls.find((control) => numberOf(control) === currentPage + (direction === "next" ? 1 : -1));
+        controls.find((control) => other(control) && directionHint(control) === direction) ??
+        controls.find((control) => other(control) && directionOf(control) === direction) ??
+        (currentPage === undefined
+          ? undefined
+          : controls.find((control) => numberOf(control) === currentPage + (direction === "next" ? 1 : -1)));
       const next = step("next");
       const previous = step("previous");
       if (next || previous) return { next, previous };
@@ -963,8 +980,8 @@ type Decisions = import("./protocol.js").Decisions;
       if (!solid[direction] && gmail[direction]) solid[direction] = gmail[direction];
     }
 
-    if (!groups.length) {
-      const pager = clickDrivenPager();
+    if (directions.some((direction) => !solid[direction])) {
+      const pager = markedPager();
       for (const direction of directions) {
         if (!solid[direction] && pager?.[direction]) solid[direction] = pager[direction];
       }
