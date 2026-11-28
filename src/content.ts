@@ -544,6 +544,35 @@ type Decisions = import("./protocol.js").Decisions;
     return groups;
   }
 
+  function directionHint(node: Element): Direction | undefined {
+    const names = [node.getAttribute("class"), node.getAttribute("aria-label")].filter(Boolean).join(" ");
+    if (/(?:^|[\s_-])prev(?:ious)?(?:[\s_-]|$)/i.test(names)) return "previous";
+    if (/(?:^|[\s_-])next(?:[\s_-]|$)/i.test(names)) return "next";
+  }
+
+  function clickDrivenPager(): Targets | undefined {
+    const roots = [...document.querySelectorAll(paginationSelector)].filter(
+      (root): root is HTMLElement =>
+        root instanceof HTMLElement &&
+        availableControl(root) &&
+        (navWords.test(root.getAttribute("class") ?? "") || navWords.test(root.getAttribute("aria-label") ?? "")),
+    );
+    for (const root of roots) {
+      const controls = [...root.querySelectorAll<HTMLElement>("a:not([href])")].filter(availableControl);
+      const numbers = controls.map(numberOf).filter((page): page is number => page !== undefined);
+      if (numbers.length < 3 || !numbers.every((page, index) => index === 0 || numbers[index - 1] < page)) continue;
+      const current = currentControl(root, controls);
+      const currentPage = current === undefined ? undefined : numberOf(current);
+      if (currentPage === undefined) continue;
+      const step = (direction: Direction) =>
+        controls.find((control) => directionHint(control) === direction) ??
+        controls.find((control) => numberOf(control) === currentPage + (direction === "next" ? 1 : -1));
+      const next = step("next");
+      const previous = step("previous");
+      if (next || previous) return { next, previous };
+    }
+  }
+
   function fingerprint(node: HTMLElement) {
     return JSON.stringify([
       node instanceof HTMLAnchorElement ? node.href : null,
@@ -930,6 +959,13 @@ type Decisions = import("./protocol.js").Decisions;
     const gmail = gmailPager();
     for (const direction of directions) {
       if (!solid[direction] && gmail[direction]) solid[direction] = gmail[direction];
+    }
+
+    if (!groups.length) {
+      const pager = clickDrivenPager();
+      for (const direction of directions) {
+        if (!solid[direction] && pager?.[direction]) solid[direction] = pager[direction];
+      }
     }
 
     const candidates: { target: HTMLElement; data: CandidateShape }[] = [];
