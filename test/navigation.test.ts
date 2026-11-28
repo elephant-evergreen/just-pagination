@@ -226,6 +226,29 @@ test("numbered pagination wins over an append control", async () => {
   );
 });
 
+test("a pager whose links only run click handlers turns by its named arrows", async () => {
+  const pager =
+    '<div class="pagination"><ul><li><a id="page-prev" class="prev-page">前</a></li>' +
+    '<li><a id="page-1" class="active">1</a></li><li><a id="page-2">2</a></li>' +
+    '<li><a id="page-3">3</a></li><li><a id="page-next" class="next-page">次</a></li></ul></div>';
+  await withPage(`<main>${listing}${pager}</main>`, ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["page-next", "page-prev"]);
+  });
+});
+
+test("a click-only pager without named arrows steps to the adjacent number", async () => {
+  const pager =
+    '<div class="pagination"><ul><li><a id="page-1">1</a></li>' +
+    '<li><a id="page-2" class="active">2</a></li><li><a id="page-3">3</a></li></ul></div>';
+  await withPage(`<main>${listing}${pager}</main>`, ({ clicks, press }) => {
+    expect(press()).toBe(true);
+    expect(press("ArrowLeft")).toBe(true);
+    expect(clicks).toEqual(["page-3", "page-1"]);
+  });
+});
+
 test("numbered links distinguish the previous page from a distant earlier page", async () => {
   const pager =
     '<nav aria-label="Pagination"><a href="?start=0"><svg></svg></a>' +
